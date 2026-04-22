@@ -2,7 +2,8 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8" />
-<title>OpenAI Realtime WebRTC Demo - Event Counter</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>TalkingAI</title>
 <style>
   /* --- ページ全体のデザイン --- */
   body {
@@ -10,17 +11,21 @@
                  "Hiragino Kaku Gothic ProN", "Noto Sans JP",
                  "Yu Gothic", sans-serif;
     margin: 12px;
+    box-sizing: border-box;
   }
+  *, *::before, *::after { box-sizing: inherit; }
+
   #controls { margin-bottom: 8px; }
-  button { margin-right: 8px; padding: 6px 10px; }
+  button { margin-right: 8px; margin-bottom: 6px; padding: 8px 12px; }
 
   /* 会話表示エリア */
   #chatContainer {
+    width: 100%;
     max-width: 800px;
     margin-top: 8px;
     border: 1px solid #eee;
     padding: 12px;
-    height: 360px;
+    height: 60vh;
     overflow: auto;
     background: #fff;
   }
@@ -55,13 +60,22 @@
     font-size: 13px;
     max-width: 800px;
   }
+
+  /* スマホ（600px以下）ではイベントパネルを非表示 */
+  @media (max-width: 600px) {
+    #eventPanel { display: none !important; }
+    #clearStatsBtn { display: none !important; }
+    button { padding: 10px 14px; font-size: 15px; }
+  }
 </style>
 </head>
 <body>
+<h1>TalkingAI</h1>
+
 <!-- ボタン類 -->
 <div id="controls">
-  <button id="startBtn">会話を開始</button>
-  <button id="stopBtn" disabled>会話を終了</button>
+  <button id="startBtn">▶ 会話を開始</button>
+  <button id="stopBtn" disabled>⏹ 会話を終了</button>
   <button id="clearStatsBtn">イベントカウントをクリア</button>
 </div>
 
@@ -87,6 +101,10 @@
 ================================ */
 // APIキーはサーバーサイド(Vercel環境変数)で管理するため、クライアントでは不要
 const PROXY_URL = "/api/session";
+
+// イベントパネルの表示設定（true: 表示 / false: 非表示）
+const SHOW_EVENT_PANEL = true;
+document.getElementById("eventPanel").style.display = SHOW_EVENT_PANEL ? "" : "none";
 
 let pc = null; // RTCPeerConnection（WebRTCの本体）
 let dc = null; // DataChannel（イベント受信用）
