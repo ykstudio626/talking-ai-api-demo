@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<title>OpenAI Realtime WebRTC Demo - Event Counter</title>
+<style>
+  /* --- ページ全体のデザイン --- */
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto,
+                 "Hiragino Kaku Gothic ProN", "Noto Sans JP",
+                 "Yu Gothic", sans-serif;
+    margin: 12px;
+  }
+  #controls { margin-bottom: 8px; }
+  button { margin-right: 8px; padding: 6px 10px; }
+
+  /* 会話表示エリア */
+  #chatContainer {
+    max-width: 800px;
+    margin-top: 8px;
+    border: 1px solid #eee;
+    padding: 12px;
+    height: 360px;
+    overflow: auto;
+    background: #fff;
+  }
+  #chatContainer p { margin: 6px 0; padding: 8px; border-radius: 6px; }
+  .ai { background: #f0f0f0; text-align: left; white-space: pre-wrap; }
+
+  /* 右上に固定表示するイベントカウンターパネル */
+  #eventPanel {
+    position: fixed;
+    right: 12px;
+    top: 12px;
+    width: 260px;
+    max-height: 70vh;
+    overflow: auto;
+    border-radius: 8px;
+    background: #ffffffee;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.08);
+    padding: 10px;
+    font-size: 13px;
+    z-index: 999;
+  }
+  #eventPanel h3 { margin: 0 0 8px 0; font-size: 14px; }
+  #eventTable { width: 100%; border-collapse: collapse; }
+  #eventTable td { padding: 4px 6px; vertical-align: middle; }
+  #eventTable td.name { max-width: 160px; word-break: break-all; color: #222; }
+  #eventTable td.count { width: 48px; text-align: right; font-weight: 600; color: #111; }
+
+  #logContainer {
+    margin-top: 10px;
+    color: #444;
+    font-size: 13px;
+    max-width: 800px;
+  }
+</style>
+</head>
+<body>
+<!-- ボタン類 -->
+<div id="controls">
+  <button id="startBtn">会話を開始</button>
+  <button id="stopBtn" disabled>会話を終了</button>
+  <button id="clearStatsBtn">イベントカウントをクリア</button>
+</div>
+
+<!-- 簡易ログを表示するエリア -->
+<div id="logContainer"></div>
+
+<h2>会話</h2>
+<div id="chatContainer"></div>
+
+<!-- 受信イベントをカウントして表示するパネル -->
+<div id="eventPanel" aria-live="polite" title="受信イベントの種類と回数">
+  <h3>受信イベント（回数）</h3>
+  <table id="eventTable">
+    <tbody id="eventTableBody">
+      <!-- JavaScriptで埋められる -->
+    </tbody>
+  </table>
+</div>
+
+<script>
+/* ===============================
+   設定と初期処理
+================================ */
+// APIキーはサーバーサイド(Vercel環境変数)で管理するため、クライアントでは不要
+const PROXY_URL = "/api/session";
+
+let pc = null; // RTCPeerConnection（WebRTCの本体）
+let dc = null; // DataChannel（イベント受信用）
+
+// 会話表示用
+const chatContainer = document.getElementById("chatContainer");
+// item_idごとに<p>要素を管理する
+const aiParagraphs = new Map();
+
+// イベントカウント用
+const eventCounts = new Map();
+const eventTableBody = document.getElementById("eventTableBody");
+
+// ボタンの動作を登録
+document.getElementById("startBtn").onclick = startSession;
+document.getElementById("stopBtn").onclick = stopSession;
+document.getElementById("clearStatsBtn").onclick = ()=>{
+  clearEventCounts();
+  renderEventCounts();
+};
+
+/* ===============================
+   セッション開始処理
+================================ */
+async function startSession() {
+  try {
+    // WebRTC接続を作成
+    pc = new RTCPeerConnection();
+
+    // --- AIからの音声を再生する用のaudioタグを作成 ---
+    const audioEl = document.createElement("audio");
+    audioEl.autoplay = true;
+    document.body.appendChild(audioEl);
+
+    // リモート音声を受け取ったらaudioにセット
+    pc.ontrack = (event)=>{
+      audioEl.srcObject = event.streams[0];
+      console.log("🎧 Remote audio track received");
+    };
+
+    // --- マイク入力を取得して送信 ---
+    const micStream = await navigator.mediaDevices.getUserMedia({ audio:true });
+    micStream.getTracks().forEach(track=>pc.addTrack(track,micStream));
+    console.log("🎤 Mic input added");
+
+    // --- DataChannelを作成（AIからのイベント受信用） ---
+    dc = pc.createDataChannel("oai-events");
+    dc.onopen = ()=>{
+      console.log("✅ Data channel open");
+      log("セッション開始しました。");
+      document.getElementById("stopBtn").disabled = false;
+      document.getElementById("startBtn").disabled = true;
+    };
+
+    // DataChannelで受け取ったメッセージ（JSON形式）
+    dc.onmessage = (evt)=>{
+      const msg = JSON.parse(evt.data);
+      const eventName = msg && msg.type ? String(msg.type) : "unknown";
+      incrementEventCount(eventName); // イベントをカウント
+      console.log("📩 Event:", msg);
+
+      /* --- 会話表示ロジック --- */
+      // 1) conversation.item.created → 表示用の<p>要素を準備
+      if(msg.type === "conversation.item.created" && msg.item && msg.item.id){
+        const itemId = msg.item.id;
+        if(!aiParagraphs.has(itemId)){
+          const p = document.createElement("p");
+          p.className = "ai";
+          p.textContent = "";
+          aiParagraphs.set(itemId, { p, appended: false });
+        }
+      }
+
+      // 2) response.audio_transcript.delta → 途中の文字列を受信
+      if(msg.type === "response.audio_transcript.delta"){
+        const itemId = msg.item_id || (msg.item && msg.item.id);
+        const deltaText = msg.delta || msg.text || "";
+        if(!deltaText) return;
+
+        let entry = itemId ? aiParagraphs.get(itemId) : undefined;
+
+        if(!entry){
+          // 念のため遅れて作成
+          const p = document.createElement("p");
+          p.className = "ai";
+          p.textContent = "AI: " + deltaText;
+          chatContainer.appendChild(p);
+          aiParagraphs.set(itemId || ("unknown_" + Date.now()), { p, appended: true });
+          scrollToBottom();
+        } else {
+          if(!entry.appended){
+            // 最初の文字列が来たら<p>をDOMに追加
+            entry.p.textContent = "AI: " + deltaText;
+            chatContainer.appendChild(entry.p);
+            entry.appended = true;
+            scrollToBottom();
+          } else {
+            // 文字をどんどん追記
+            entry.p.textContent += deltaText;
+            scrollToBottom();
+          }
+        }
+      }
+
+      // 3) response.audio_transcript.done → 確定したらMapから削除
+      if(msg.type === "response.audio_transcript.done"){
+        const itemId = msg.item_id || (msg.item && msg.item.id);
+        if(!itemId) return;
+        const entry = aiParagraphs.get(itemId);
+        if(entry){
+          if(entry.appended){
+            entry.p.textContent = entry.p.textContent.trim();
+          }
+          aiParagraphs.delete(itemId);
+        }
+      }
+    };
+
+    // --- SDPを使ったWebRTCハンドシェイク ---
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+
+    // プロキシ経由でOpenAIにOfferを送信 → Answerを取得（APIキーはサーバーサイドで付与）
+    const sdpResponse = await fetch(PROXY_URL,{
+      method:"POST",
+      headers:{ "Content-Type":"application/sdp" },
+      body: offer.sdp
+    });
+
+    const answer = { type:"answer", sdp: await sdpResponse.text() };
+    await pc.setRemoteDescription(answer);
+    console.log("🎤 Session started");
+
+  } catch(err){
+    console.error("❌ Error:",err);
+    log("エラーが発生しました。詳細はコンソールを確認してください。");
+  }
+}
+
+/* ===============================
+   セッション終了処理
+================================ */
+function stopSession(){
+  if(dc){ dc.close(); dc=null; }
+  if(pc){ pc.close(); pc=null; }
+  log("セッションを終了しました。");
+  console.log("🛑 Session stopped");
+
+  document.getElementById("stopBtn").disabled=true;
+  document.getElementById("startBtn").disabled=false;
+  aiParagraphs.clear();
+  renderEventCounts(); // カウンタは保持
+}
+
+/* ===============================
+   補助関数
+================================ */
+function log(msg){
+  const div=document.getElementById("logContainer");
+  const p=document.createElement("p");
+  p.textContent=msg;
+  div.appendChild(p);
+}
+
+// チャット欄を下にスクロール
+function scrollToBottom(){
+  chatContainer.scrollTop = chatContainer.scrollHeight;
+}
+
+/* ---------- イベントカウント関連 ---------- */
+function incrementEventCount(eventName){
+  const prev = eventCounts.get(eventName) || 0;
+  eventCounts.set(eventName, prev + 1);
+  renderEventCounts();
+}
+
+function clearEventCounts(){
+  eventCounts.clear();
+}
+
+// イベントカウントを表に表示
+function renderEventCounts(){
+  const entries = Array.from(eventCounts.entries()).sort((a,b)=> b[1] - a[1]);
+  eventTableBody.innerHTML = "";
+
+  if(entries.length === 0){
+    const tr = document.createElement("tr");
+    const td = document.createElement("td");
+    td.colSpan = 2;
+    td.textContent = "まだイベントが受信されていません。";
+    td.style.fontStyle = "italic";
+    tr.appendChild(td);
+    eventTableBody.appendChild(tr);
+    return;
+  }
+
+  for(const [name, count] of entries){
+    const tr = document.createElement("tr");
+    const tdName = document.createElement("td");
+    tdName.className = "name";
+    tdName.textContent = name;
+
+    const tdCnt = document.createElement("td");
+    tdCnt.className = "count";
+    tdCnt.textContent = String(count);
+
+    tr.appendChild(tdName);
+    tr.appendChild(tdCnt);
+    eventTableBody.appendChild(tr);
+  }
+}
+
+// 初期状態は「まだイベントがない」
+renderEventCounts();
+</script>
+</body>
+</html>
+
