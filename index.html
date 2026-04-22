@@ -33,27 +33,6 @@
   .ai   { background: #f0f0f0; text-align: left;  white-space: pre-wrap; }
   .user { background: #d4edff; text-align: right; white-space: pre-wrap; }
 
-  /* 右上に固定表示するイベントカウンターパネル */
-  #eventPanel {
-    position: fixed;
-    right: 12px;
-    top: 12px;
-    width: 260px;
-    max-height: 70vh;
-    overflow: auto;
-    border-radius: 8px;
-    background: #ffffffee;
-    box-shadow: 0 6px 18px rgba(0,0,0,0.08);
-    padding: 10px;
-    font-size: 13px;
-    z-index: 999;
-  }
-  #eventPanel h3 { margin: 0 0 8px 0; font-size: 14px; }
-  #eventTable { width: 100%; border-collapse: collapse; }
-  #eventTable td { padding: 4px 6px; vertical-align: middle; }
-  #eventTable td.name { max-width: 160px; word-break: break-all; color: #222; }
-  #eventTable td.count { width: 48px; text-align: right; font-weight: 600; color: #111; }
-
   #logContainer {
     margin-top: 10px;
     color: #444;
@@ -61,10 +40,8 @@
     max-width: 800px;
   }
 
-  /* スマホ（600px以下）ではイベントパネルを非表示 */
+  /* スマホ（600px以下） */
   @media (max-width: 600px) {
-    #eventPanel { display: none !important; }
-    #clearStatsBtn { display: none !important; }
     button { padding: 10px 14px; font-size: 15px; }
   }
 </style>
@@ -76,7 +53,6 @@
 <div id="controls">
   <button id="startBtn">▶ 会話を開始</button>
   <button id="stopBtn" disabled>⏹ 会話を終了</button>
-  <button id="clearStatsBtn">イベントカウントをクリア</button>
 </div>
 
 <!-- 簡易ログを表示するエリア -->
@@ -85,26 +61,14 @@
 <h2>会話</h2>
 <div id="chatContainer"></div>
 
-<!-- 受信イベントをカウントして表示するパネル -->
-<div id="eventPanel" aria-live="polite" title="受信イベントの種類と回数">
-  <h3>受信イベント（回数）</h3>
-  <table id="eventTable">
-    <tbody id="eventTableBody">
-      <!-- JavaScriptで埋められる -->
-    </tbody>
-  </table>
-</div>
-
 <script>
 /* ===============================
-   設定と初期処理
+   設定
 ================================ */
-// APIキーはサーバーサイド(Vercel環境変数)で管理するため、クライアントでは不要
 const PROXY_URL = "/api/session";
 
-// イベントパネルの表示設定（true: 表示 / false: 非表示）
-const SHOW_EVENT_PANEL = true;
-document.getElementById("eventPanel").style.display = SHOW_EVENT_PANEL ? "" : "none";
+// true にするとイベントをブラウザコンソールにログ出力する
+const EVENT_LOG = true;
 
 let pc = null; // RTCPeerConnection（WebRTCの本体）
 let dc = null; // DataChannel（イベント受信用）
@@ -114,17 +78,9 @@ const chatContainer = document.getElementById("chatContainer");
 // item_idごとに<p>要素を管理する
 const aiParagraphs = new Map();
 
-// イベントカウント用
-const eventCounts = new Map();
-const eventTableBody = document.getElementById("eventTableBody");
-
 // ボタンの動作を登録
 document.getElementById("startBtn").onclick = startSession;
 document.getElementById("stopBtn").onclick = stopSession;
-document.getElementById("clearStatsBtn").onclick = ()=>{
-  clearEventCounts();
-  renderEventCounts();
-};
 
 /* ===============================
    セッション開始処理
@@ -168,8 +124,9 @@ async function startSession() {
     dc.onmessage = (evt)=>{
       const msg = JSON.parse(evt.data);
       const eventName = msg && msg.type ? String(msg.type) : "unknown";
-      incrementEventCount(eventName); // イベントをカウント
-      console.log("📩 Event:", msg);
+
+      // EVENT_LOG が true のときコンソールにイベントを出力
+      if(EVENT_LOG) console.log(`📩 [${eventName}]`, msg);
 
       /* --- 会話表示ロジック --- */
       // 1) conversation.item.created → role に応じて<p>要素を準備
@@ -288,7 +245,6 @@ function stopSession(){
   document.getElementById("stopBtn").disabled=true;
   document.getElementById("startBtn").disabled=false;
   aiParagraphs.clear();
-  renderEventCounts(); // カウンタは保持
 }
 
 /* ===============================
@@ -305,53 +261,6 @@ function log(msg){
 function scrollToBottom(){
   chatContainer.scrollTop = chatContainer.scrollHeight;
 }
-
-/* ---------- イベントカウント関連 ---------- */
-function incrementEventCount(eventName){
-  const prev = eventCounts.get(eventName) || 0;
-  eventCounts.set(eventName, prev + 1);
-  renderEventCounts();
-}
-
-function clearEventCounts(){
-  eventCounts.clear();
-}
-
-// イベントカウントを表に表示
-function renderEventCounts(){
-  const entries = Array.from(eventCounts.entries()).sort((a,b)=> b[1] - a[1]);
-  eventTableBody.innerHTML = "";
-
-  if(entries.length === 0){
-    const tr = document.createElement("tr");
-    const td = document.createElement("td");
-    td.colSpan = 2;
-    td.textContent = "まだイベントが受信されていません。";
-    td.style.fontStyle = "italic";
-    tr.appendChild(td);
-    eventTableBody.appendChild(tr);
-    return;
-  }
-
-  for(const [name, count] of entries){
-    const tr = document.createElement("tr");
-    const tdName = document.createElement("td");
-    tdName.className = "name";
-    tdName.textContent = name;
-
-    const tdCnt = document.createElement("td");
-    tdCnt.className = "count";
-    tdCnt.textContent = String(count);
-
-    tr.appendChild(tdName);
-    tr.appendChild(tdCnt);
-    eventTableBody.appendChild(tr);
-  }
-}
-
-// 初期状態は「まだイベントがない」
-renderEventCounts();
 </script>
 </body>
 </html>
-
