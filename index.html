@@ -120,7 +120,7 @@ async function startSession() {
     audioEl.autoplay = true;
     document.body.appendChild(audioEl);
 
-    // リモート音声を受け取ったらaudioにセット
+    // リモート音声を受け取ったら(ontrack)audioタグにセット
     pc.ontrack = (event)=>{
       audioEl.srcObject = event.streams[0];
       console.log("🎧 Remote audio track received");
