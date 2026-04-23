@@ -31,6 +31,10 @@
   #startBtn { width: 128px; }
   #startBtn.active { background: #c8f0c8; border-color: #6abf6a; }
 
+  h1{ margin-bottom: 0.3em;}
+
+  .sm-text {font-size:small; color: #1081eb;}
+
   /* アバター＋チャットのラッパー */
   #avatarWrapper {
     position: relative;
@@ -85,7 +89,7 @@
 </style>
 </head>
 <body>
-<h1>おはなしチャッピー</h1>
+<h1>おはなしチャッピー</h1><span class="sm-text">※会話の記録は行なっていません。自由にお楽しみください！</span>
 
 <div id="controls">
   <button id="startBtn">▶ 会話を開始</button>
@@ -254,8 +258,9 @@ let mouthAnimId = null;
 // VRMモジュールが参照する現在のRMS値
 window.currentRms = 0;
 
-const chatContainer = document.getElementById("chatContainer");
-const aiParagraphs  = new Map();
+const chatContainer       = document.getElementById("chatContainer");
+const aiParagraphs        = new Map();
+const userPlaceholderQueue = []; // 文字起こし待ちのユーザープレースホルダーキュー
 
 document.getElementById("startBtn").onclick = startSession;
 document.getElementById("stopBtn").onclick  = stopSession;
@@ -310,7 +315,10 @@ async function startSession() {
       document.getElementById("stopBtn").disabled = false;
       dc.send(JSON.stringify({
         type: "session.update",
-        session: { input_audio_transcription: { model: "whisper-1" } }
+        session: {
+          input_audio_transcription: { model: "whisper-1" },
+          voice: "shimmer"
+        }
       }));
       // AUTO_START 時：AIに最初の挨拶を発話させる
       if (AUTO_START) {
@@ -339,7 +347,10 @@ async function startSession() {
             p.textContent = "You: …";
             chatContainer.appendChild(p);
             scrollToBottom();
-            aiParagraphs.set(itemId, { p, appended: true });
+            const userEntry = { p, appended: true, isUser: true };
+            aiParagraphs.set(itemId, userEntry);
+            userPlaceholderQueue.push({ itemId, entry: userEntry });
+            console.log("🗣 User item created, id:", itemId);
           } else {
             p.className   = "ai";
             p.textContent = "";
@@ -379,10 +390,20 @@ async function startSession() {
       if (msg.type === "conversation.item.input_audio_transcription.completed") {
         const itemId     = msg.item_id;
         const transcript = (msg.transcript || "").trim();
-        const entry      = itemId ? aiParagraphs.get(itemId) : null;
-        if (entry && transcript) {
+        console.log("📝 Transcription event: item_id=", itemId, "transcript=", transcript, "queue=", userPlaceholderQueue.length);
+        if (!transcript) return; // 空文字は無視
+        // ① item_id でマップから直接検索
+        const entry = itemId ? aiParagraphs.get(itemId) : null;
+        if (entry && entry.isUser) {
           entry.p.textContent = "You: " + transcript;
-        } else if (!entry && transcript) {
+          const qi = userPlaceholderQueue.findIndex(q => q.itemId === itemId);
+          if (qi !== -1) userPlaceholderQueue.splice(qi, 1);
+        } else if (userPlaceholderQueue.length > 0) {
+          // ② item_id 不一致時はキューの先頭（最も古い未解決プレースホルダー）を使用
+          const queued = userPlaceholderQueue.shift();
+          queued.entry.p.textContent = "You: " + transcript;
+        } else {
+          // ③ プレースホルダーが存在しない場合は新規追加
           const p = document.createElement("p");
           p.className   = "user";
           p.textContent = "You: " + transcript;
@@ -438,6 +459,7 @@ function stopSession() {
   startBtn.classList.remove("active");
   startBtn.disabled = false;
   aiParagraphs.clear();
+  userPlaceholderQueue.length = 0;
 }
 
 /* ===============================
