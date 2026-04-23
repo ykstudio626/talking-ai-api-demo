@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>TalkingAI</title>
+<title>おはなしAI</title>
 
 <!-- Three.js + @pixiv/three-vrm のインポートマップ -->
 <script type="importmap">
@@ -60,7 +60,7 @@
     bottom: 0;
     left: 0;
     right: 0;
-    height: 40%;
+    height: 60%;
     padding: 12px;
     overflow-y: auto;
     background: rgba(255, 255, 255, 0.0);
@@ -85,7 +85,7 @@
 </style>
 </head>
 <body>
-<h1>TalkingAI</h1>
+<h1>おはなしAI</h1>
 
 <div id="controls">
   <button id="startBtn">▶ 会話を開始</button>
@@ -242,6 +242,10 @@ const PROXY_URL = "/api/session";
 // true にするとイベントをブラウザコンソールにログ出力する
 const EVENT_LOG = true;
 
+// true にするとページロード時にセッションを自動開始し、AIが最初の挨拶を発話する
+const AUTO_START = true;
+const AUTO_START_MESSAGE = "こんにちは、あなたのニックネームを教えてくれるかな？";
+
 let pc          = null;
 let dc          = null;
 let audioCtx    = null;
@@ -255,6 +259,8 @@ const aiParagraphs  = new Map();
 
 document.getElementById("startBtn").onclick = startSession;
 document.getElementById("stopBtn").onclick  = stopSession;
+
+if (AUTO_START) startSession();
 
 /* ===============================
    セッション開始処理
@@ -306,6 +312,15 @@ async function startSession() {
         type: "session.update",
         session: { input_audio_transcription: { model: "whisper-1" } }
       }));
+      // AUTO_START 時：AIに最初の挨拶を発話させる
+      if (AUTO_START) {
+        dc.send(JSON.stringify({
+          type: "response.create",
+          response: {
+            instructions: `「${AUTO_START_MESSAGE}」とだけ言ってください。`
+          }
+        }));
+      }
     };
 
     dc.onmessage = (evt) => {
