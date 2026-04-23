@@ -4,8 +4,19 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>TalkingAI</title>
+
+<!-- Three.js + @pixiv/three-vrm のインポートマップ -->
+<script type="importmap">
+{
+  "imports": {
+    "three":          "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+    "three/addons/":  "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/",
+    "@pixiv/three-vrm": "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@2.1.2/lib/three-vrm.module.min.js"
+  }
+}
+</script>
+
 <style>
-  /* --- ページ全体のデザイン --- */
   body {
     font-family: system-ui, -apple-system, "Segoe UI", Roboto,
                  "Hiragino Kaku Gothic ProN", "Noto Sans JP",
@@ -17,50 +28,211 @@
 
   #controls { margin-bottom: 8px; }
   button { margin-right: 8px; margin-bottom: 6px; padding: 8px 12px; }
+  #startBtn { width: 128px; }
+  #startBtn.active { background: #c8f0c8; border-color: #6abf6a; }
 
-  /* 会話表示エリア */
-  #chatContainer {
+  /* アバター＋チャットのラッパー */
+  #avatarWrapper {
+    position: relative;
     width: 100%;
     max-width: 800px;
+    height: calc(100vh - 90px); /* ヘッダー・ボタン分を引いた残り全体 */
     margin-top: 8px;
-    border: 1px solid #eee;
+  }
+
+  /* VRMアバターキャンバス */
+  #avatarCanvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+  #avatarLoading {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    font-size: 13px;
+    color: #888;
+  }
+
+  /* 会話表示エリア（オーバーレイ） */
+  #chatContainer {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 40%;
     padding: 12px;
-    height: 60vh;
-    overflow: auto;
-    background: #fff;
+    overflow-y: auto;
+    background: rgba(255, 255, 255, 0.0);
+    /* backdrop-filter: blur(6px); */
+    /* -webkit-backdrop-filter: blur(6px); */
   }
   #chatContainer p { margin: 6px 0; padding: 8px; border-radius: 6px; }
-  .ai   { background: #f0f0f0; text-align: left;  white-space: pre-wrap; }
-  .user { background: #d4edff; text-align: right; white-space: pre-wrap; }
+  .ai   { background: rgba(240,240,240,0.7); text-align: left;  white-space: pre-wrap; }
+  .user { background: rgba(212,237,255,0.7); text-align: right; white-space: pre-wrap; }
 
   #logContainer {
-    margin-top: 10px;
+    margin-top: 6px;
     color: #444;
     font-size: 13px;
     max-width: 800px;
   }
 
-  /* スマホ（600px以下） */
   @media (max-width: 600px) {
     button { padding: 10px 14px; font-size: 15px; }
+    #avatarWrapper { height: calc(100vh - 80px); }
   }
 </style>
 </head>
 <body>
 <h1>TalkingAI</h1>
 
-<!-- ボタン類 -->
 <div id="controls">
   <button id="startBtn">▶ 会話を開始</button>
   <button id="stopBtn" disabled>⏹ 会話を終了</button>
 </div>
 
-<!-- 簡易ログを表示するエリア -->
 <div id="logContainer"></div>
 
-<h2>会話</h2>
-<div id="chatContainer"></div>
+<!-- アバター＋チャットオーバーレイ -->
+<div id="avatarWrapper">
+  <canvas id="avatarCanvas"></canvas>
+  <div id="avatarLoading">アバター読み込み中…</div>
+  <div id="chatContainer"></div>
+</div>
 
+
+<!-- ===== Three.js + VRM（モジュール） ===== -->
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader }                     from 'three/addons/loaders/GLTFLoader.js';
+import { VRMLoaderPlugin, VRMUtils }      from '@pixiv/three-vrm';
+
+const VRM_PATH = './6055378321192136326.vrm';
+
+// レンダラー
+const canvas   = document.getElementById('avatarCanvas');
+const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+const scene  = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 20);
+camera.position.set(0, 1.5, 1.5);// (x, y, z) zを増やすと遠ざかる
+camera.lookAt(new THREE.Vector3(0, 1.5, 0));
+
+// canvasのサイズ変化に追従してレンダラー・カメラを更新
+function onResize() {
+  const w = canvas.clientWidth;
+  const h = canvas.clientHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+onResize();
+new ResizeObserver(onResize).observe(canvas);
+
+// ライティング
+const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+dirLight.position.set(1, 2, 2);
+scene.add(dirLight);
+scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+
+// VRM 読み込み
+let vrm  = null;
+let bones = {}; // アニメーション用ボーンキャッシュ
+
+const loader = new GLTFLoader();
+loader.register(parser => new VRMLoaderPlugin(parser));
+
+loader.load(
+  VRM_PATH,
+  (gltf) => {
+    vrm = gltf.userData.vrm;
+    VRMUtils.removeUnnecessaryVertices(gltf.scene);
+    vrm.scene.rotation.y = Math.PI;
+    scene.add(vrm.scene);
+
+    // 腕を下ろす
+    const leftArm  = vrm.humanoid.getNormalizedBoneNode('leftUpperArm');
+    const rightArm = vrm.humanoid.getNormalizedBoneNode('rightUpperArm');
+    if (leftArm)  leftArm.rotation.z  =  1.4;
+    if (rightArm) rightArm.rotation.z = -1.4;
+
+    // アイドルアニメーション用にボーンをキャッシュ
+    bones = {
+      hips:  vrm.humanoid.getNormalizedBoneNode('hips'),
+      spine: vrm.humanoid.getNormalizedBoneNode('spine'),
+      head:  vrm.humanoid.getNormalizedBoneNode('head'),
+    };
+
+    document.getElementById('avatarLoading').textContent = '';
+    console.log('✅ VRM loaded');
+  },
+  (progress) => {
+    const pct = progress.total
+      ? (progress.loaded / progress.total * 100).toFixed(0)
+      : '…';
+    document.getElementById('avatarLoading').textContent = `アバター読み込み中… ${pct}%`;
+  },
+  (error) => {
+    document.getElementById('avatarLoading').textContent = 'アバターの読み込みに失敗しました';
+    console.error('❌ VRM load error:', error);
+  }
+);
+
+// アニメーションループ（常時実行）
+const clock = new THREE.Clock();
+
+(function animate() {
+  let t_coef = 3;
+  requestAnimationFrame(animate);
+  const delta = clock.getDelta();
+  const t     = clock.getElapsedTime();
+
+  if (vrm) {
+    /* --- 口パク --- */
+    const rms      = window.currentRms || 0;
+    const mouthVal = Math.min(1.0, rms / 25);
+    vrm.expressionManager?.setValue('aa', mouthVal);
+    vrm.expressionManager?.setValue('A',  mouthVal);
+
+    /* --- アイドルアニメーション --- */
+    // 呼吸：胸が約4秒周期でゆっくり前後
+    if (bones.spine) {
+      bones.spine.rotation.x = Math.sin(t * 0.5 * t_coef) * 0.018;
+    }
+    // 体の微妙な揺れ：約8秒周期で左右・前後
+    
+    if (bones.hips) {
+      bones.hips.rotation.z = Math.sin(t * 0.35 * t_coef) * 0.012
+                            + Math.sin(t * 0.13 * t_coef) * 0.006;
+      bones.hips.rotation.x = Math.sin(t * 0.28 * t_coef) * 0.008;
+    }
+    // 頭の微動：視線が少し動くような揺れ
+    if (bones.head) {
+      bones.head.rotation.y = Math.sin(t * 0.22 * t_coef) * 0.018
+                            + Math.sin(t * 0.07 * t_coef) * 0.010;
+      bones.head.rotation.z = Math.sin(t * 0.31 * t_coef) * 0.012;
+    }
+    // まばたき：約5秒ごとに0.15秒かけて閉じて開く
+    const blinkPhase = t % 5;
+    const blinkVal   = blinkPhase < 0.15
+      ? Math.sin((blinkPhase / 0.15) * Math.PI)
+      : 0;
+    vrm.expressionManager?.setValue('blink',      blinkVal);
+    vrm.expressionManager?.setValue('blinkLeft',  blinkVal);
+    vrm.expressionManager?.setValue('blinkRight', blinkVal);
+    vrm.expressionManager?.setValue('Blink',      blinkVal); // VRM 0.x
+
+    vrm.update(delta);
+  }
+
+  renderer.render(scene, camera);
+})();
+</script>
+
+
+<!-- ===== メインアプリロジック ===== -->
 <script>
 /* ===============================
    設定
@@ -70,165 +242,167 @@ const PROXY_URL = "/api/session";
 // true にするとイベントをブラウザコンソールにログ出力する
 const EVENT_LOG = true;
 
-let pc = null; // RTCPeerConnection（WebRTCの本体）
-let dc = null; // DataChannel（イベント受信用）
+let pc          = null;
+let dc          = null;
+let audioCtx    = null;
+let mouthAnimId = null;
 
-// 会話表示用
+// VRMモジュールが参照する現在のRMS値
+window.currentRms = 0;
+
 const chatContainer = document.getElementById("chatContainer");
-// item_idごとに<p>要素を管理する
-const aiParagraphs = new Map();
+const aiParagraphs  = new Map();
 
-// ボタンの動作を登録
 document.getElementById("startBtn").onclick = startSession;
-document.getElementById("stopBtn").onclick = stopSession;
+document.getElementById("stopBtn").onclick  = stopSession;
 
 /* ===============================
    セッション開始処理
 ================================ */
 async function startSession() {
   try {
-    // WebRTC接続を作成
     pc = new RTCPeerConnection();
 
-    // --- AIからの音声を再生する用のaudioタグを作成 ---
     const audioEl = document.createElement("audio");
     audioEl.autoplay = true;
     document.body.appendChild(audioEl);
 
-    // リモート音声を受け取ったら(ontrack)audioタグにセット
-    pc.ontrack = (event)=>{
+    pc.ontrack = (event) => {
       audioEl.srcObject = event.streams[0];
       console.log("🎧 Remote audio track received");
+
+      // AI音声の音量を解析して口パク値を更新
+      audioCtx = new AudioContext();
+      const source   = audioCtx.createMediaStreamSource(event.streams[0]);
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 256;
+      source.connect(analyser);
+
+      const dataArray = new Uint8Array(analyser.fftSize);
+
+      function updateRms() {
+        analyser.getByteTimeDomainData(dataArray);
+        let sum = 0;
+        for (const v of dataArray) sum += (v - 128) ** 2;
+        window.currentRms = Math.sqrt(sum / dataArray.length);
+        mouthAnimId = requestAnimationFrame(updateRms);
+      }
+      updateRms();
     };
 
-    // --- マイク入力を取得して送信 ---
-    const micStream = await navigator.mediaDevices.getUserMedia({ audio:true });
-    micStream.getTracks().forEach(track=>pc.addTrack(track,micStream));
+    const micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    micStream.getTracks().forEach(track => pc.addTrack(track, micStream));
     console.log("🎤 Mic input added");
 
-    // --- DataChannelを作成（AIからのイベント受信用） ---
     dc = pc.createDataChannel("oai-events");
-    dc.onopen = ()=>{
+    dc.onopen = () => {
       console.log("✅ Data channel open");
-      log("セッション開始しました。");
+      const startBtn = document.getElementById("startBtn");
+      startBtn.textContent = "会話中…";
+      startBtn.classList.add("active");
+      startBtn.disabled = true;
       document.getElementById("stopBtn").disabled = false;
-      document.getElementById("startBtn").disabled = true;
-      // ユーザー音声の文字起こしを有効化
       dc.send(JSON.stringify({
         type: "session.update",
         session: { input_audio_transcription: { model: "whisper-1" } }
       }));
     };
 
-    // DataChannelで受け取ったメッセージ（JSON形式）
-    dc.onmessage = (evt)=>{
-      const msg = JSON.parse(evt.data);
+    dc.onmessage = (evt) => {
+      const msg       = JSON.parse(evt.data);
       const eventName = msg && msg.type ? String(msg.type) : "unknown";
+      if (EVENT_LOG) console.log(`📩 [${eventName}]`, msg);
 
-      // EVENT_LOG が true のときコンソールにイベントを出力
-      if(EVENT_LOG) console.log(`📩 [${eventName}]`, msg);
-
-      /* --- 会話表示ロジック --- */
-      // 1) conversation.item.created → role に応じて<p>要素を準備
-      if(msg.type === "conversation.item.created" && msg.item && msg.item.id){
+      // 1) conversation.item.created → role に応じて <p> を準備
+      if (msg.type === "conversation.item.created" && msg.item && msg.item.id) {
         const itemId = msg.item.id;
-        const role = msg.item.role; // "user" or "assistant"
-        if(!aiParagraphs.has(itemId)){
+        const role   = msg.item.role;
+        if (!aiParagraphs.has(itemId)) {
           const p = document.createElement("p");
-          if(role === "user"){
-            // ユーザー発話は先に DOM に追加（順序を確保するため）
-            p.className = "user";
+          if (role === "user") {
+            p.className   = "user";
             p.textContent = "You: …";
             chatContainer.appendChild(p);
             scrollToBottom();
             aiParagraphs.set(itemId, { p, appended: true });
           } else {
-            p.className = "ai";
+            p.className   = "ai";
             p.textContent = "";
             aiParagraphs.set(itemId, { p, appended: false });
           }
         }
       }
 
-      // 2) response.audio_transcript.delta → 途中の文字列を受信
-      if(msg.type === "response.audio_transcript.delta"){
-        const itemId = msg.item_id || (msg.item && msg.item.id);
+      // 2) response.audio_transcript.delta → AI の発話を追記
+      if (msg.type === "response.audio_transcript.delta") {
+        const itemId    = msg.item_id || (msg.item && msg.item.id);
         const deltaText = msg.delta || msg.text || "";
-        if(!deltaText) return;
+        if (!deltaText) return;
 
         let entry = itemId ? aiParagraphs.get(itemId) : undefined;
-
-        if(!entry){
-          // 念のため遅れて作成
+        if (!entry) {
           const p = document.createElement("p");
-          p.className = "ai";
+          p.className   = "ai";
           p.textContent = "AI: " + deltaText;
           chatContainer.appendChild(p);
           aiParagraphs.set(itemId || ("unknown_" + Date.now()), { p, appended: true });
           scrollToBottom();
         } else {
-          if(!entry.appended){
-            // 最初の文字列が来たら<p>をDOMに追加
+          if (!entry.appended) {
             entry.p.textContent = "AI: " + deltaText;
             chatContainer.appendChild(entry.p);
             entry.appended = true;
             scrollToBottom();
           } else {
-            // 文字をどんどん追記
             entry.p.textContent += deltaText;
             scrollToBottom();
           }
         }
       }
 
-      // 3) ユーザーの発話文字起こし完了 → プレースホルダーを実際のテキストに更新
-      if(msg.type === "conversation.item.input_audio_transcription.completed"){
-        const itemId = msg.item_id;
+      // 3) ユーザーの文字起こし完了 → プレースホルダーを更新
+      if (msg.type === "conversation.item.input_audio_transcription.completed") {
+        const itemId     = msg.item_id;
         const transcript = (msg.transcript || "").trim();
-        const entry = itemId ? aiParagraphs.get(itemId) : null;
-        if(entry && transcript){
+        const entry      = itemId ? aiParagraphs.get(itemId) : null;
+        if (entry && transcript) {
           entry.p.textContent = "You: " + transcript;
-        } else if(!entry && transcript){
-          // フォールバック（item が見つからない場合）
+        } else if (!entry && transcript) {
           const p = document.createElement("p");
-          p.className = "user";
+          p.className   = "user";
           p.textContent = "You: " + transcript;
           chatContainer.appendChild(p);
           scrollToBottom();
         }
       }
 
-      // 4) response.audio_transcript.done → 確定したらMapから削除
-      if(msg.type === "response.audio_transcript.done"){
+      // 4) response.audio_transcript.done → Map から削除
+      if (msg.type === "response.audio_transcript.done") {
         const itemId = msg.item_id || (msg.item && msg.item.id);
-        if(!itemId) return;
+        if (!itemId) return;
         const entry = aiParagraphs.get(itemId);
-        if(entry){
-          if(entry.appended){
-            entry.p.textContent = entry.p.textContent.trim();
-          }
+        if (entry) {
+          if (entry.appended) entry.p.textContent = entry.p.textContent.trim();
           aiParagraphs.delete(itemId);
         }
       }
     };
 
-    // --- SDPを使ったWebRTCハンドシェイク ---
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
 
-    // プロキシ経由でOpenAIにOfferを送信 → Answerを取得（APIキーはサーバーサイドで付与）
-    const sdpResponse = await fetch(PROXY_URL,{
-      method:"POST",
-      headers:{ "Content-Type":"application/sdp" },
-      body: offer.sdp
+    const sdpResponse = await fetch(PROXY_URL, {
+      method:  "POST",
+      headers: { "Content-Type": "application/sdp" },
+      body:    offer.sdp
     });
 
-    const answer = { type:"answer", sdp: await sdpResponse.text() };
+    const answer = { type: "answer", sdp: await sdpResponse.text() };
     await pc.setRemoteDescription(answer);
     console.log("🎤 Session started");
 
-  } catch(err){
-    console.error("❌ Error:",err);
+  } catch (err) {
+    console.error("❌ Error:", err);
     log("エラーが発生しました。詳細はコンソールを確認してください。");
   }
 }
@@ -236,29 +410,32 @@ async function startSession() {
 /* ===============================
    セッション終了処理
 ================================ */
-function stopSession(){
-  if(dc){ dc.close(); dc=null; }
-  if(pc){ pc.close(); pc=null; }
-  log("セッションを終了しました。");
+function stopSession() {
+  if (dc)          { dc.close();                       dc = null; }
+  if (pc)          { pc.close();                       pc = null; }
+  if (mouthAnimId) { cancelAnimationFrame(mouthAnimId); mouthAnimId = null; }
+  if (audioCtx)    { audioCtx.close();                 audioCtx = null; }
+  window.currentRms = 0;
   console.log("🛑 Session stopped");
-
-  document.getElementById("stopBtn").disabled=true;
-  document.getElementById("startBtn").disabled=false;
+  document.getElementById("stopBtn").disabled = true;
+  const startBtn = document.getElementById("startBtn");
+  startBtn.textContent = "▶ 会話を開始";
+  startBtn.classList.remove("active");
+  startBtn.disabled = false;
   aiParagraphs.clear();
 }
 
 /* ===============================
    補助関数
 ================================ */
-function log(msg){
-  const div=document.getElementById("logContainer");
-  const p=document.createElement("p");
-  p.textContent=msg;
+function log(msg) {
+  const div = document.getElementById("logContainer");
+  const p   = document.createElement("p");
+  p.textContent = msg;
   div.appendChild(p);
 }
 
-// チャット欄を下にスクロール
-function scrollToBottom(){
+function scrollToBottom() {
   chatContainer.scrollTop = chatContainer.scrollHeight;
 }
 </script>
