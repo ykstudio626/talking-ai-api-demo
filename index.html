@@ -112,7 +112,7 @@ import * as THREE from 'three';
 import { GLTFLoader }                     from 'three/addons/loaders/GLTFLoader.js';
 import { VRMLoaderPlugin, VRMUtils }      from '@pixiv/three-vrm';
 
-const VRM_PATH = './6055378321192136326.vrm';
+const VRM_PATH = '.model-data/6055378321192136326.vrm';
 
 // レンダラー
 const canvas   = document.getElementById('avatarCanvas');
@@ -194,39 +194,51 @@ const clock = new THREE.Clock();
   const t     = clock.getElapsedTime();
 
   if (vrm) {
-    /* --- 口パク --- */
-    const rms      = window.currentRms || 0;
-    const mouthVal = Math.min(1.0, rms / 25);
-    vrm.expressionManager?.setValue('aa', mouthVal);
-    vrm.expressionManager?.setValue('A',  mouthVal);
+    if (window.avatarPaused) {
+      // セッション停止中：ニュートラルポーズに戻してフリーズ
+      vrm.expressionManager?.setValue('aa', 0);
+      vrm.expressionManager?.setValue('A',  0);
+      vrm.expressionManager?.setValue('blink',      0);
+      vrm.expressionManager?.setValue('blinkLeft',  0);
+      vrm.expressionManager?.setValue('blinkRight', 0);
+      vrm.expressionManager?.setValue('Blink',      0);
+      if (bones.spine) bones.spine.rotation.x = 0;
+      if (bones.hips)  { bones.hips.rotation.z = 0; bones.hips.rotation.x = 0; }
+      if (bones.head)  { bones.head.rotation.y = 0; bones.head.rotation.z = 0; }
+    } else {
+      /* --- 口パク --- */
+      const rms      = window.currentRms || 0;
+      const mouthVal = Math.min(1.0, rms / 25);
+      vrm.expressionManager?.setValue('aa', mouthVal);
+      vrm.expressionManager?.setValue('A',  mouthVal);
 
-    /* --- アイドルアニメーション --- */
-    // 呼吸：胸が約4秒周期でゆっくり前後
-    if (bones.spine) {
-      bones.spine.rotation.x = Math.sin(t * 0.5 * t_coef) * 0.018;
+      /* --- アイドルアニメーション --- */
+      // 呼吸：胸が約4秒周期でゆっくり前後
+      if (bones.spine) {
+        bones.spine.rotation.x = Math.sin(t * 0.5 * t_coef) * 0.018;
+      }
+      // 体の微妙な揺れ：約8秒周期で左右・前後
+      if (bones.hips) {
+        bones.hips.rotation.z = Math.sin(t * 0.35 * t_coef) * 0.012
+                              + Math.sin(t * 0.13 * t_coef) * 0.006;
+        bones.hips.rotation.x = Math.sin(t * 0.28 * t_coef) * 0.008;
+      }
+      // 頭の微動：視線が少し動くような揺れ
+      if (bones.head) {
+        bones.head.rotation.y = Math.sin(t * 0.22 * t_coef) * 0.018
+                              + Math.sin(t * 0.07 * t_coef) * 0.010;
+        bones.head.rotation.z = Math.sin(t * 0.31 * t_coef) * 0.012;
+      }
+      // まばたき：約5秒ごとに0.15秒かけて閉じて開く
+      const blinkPhase = t % 5;
+      const blinkVal   = blinkPhase < 0.15
+        ? Math.sin((blinkPhase / 0.15) * Math.PI)
+        : 0;
+      vrm.expressionManager?.setValue('blink',      blinkVal);
+      vrm.expressionManager?.setValue('blinkLeft',  blinkVal);
+      vrm.expressionManager?.setValue('blinkRight', blinkVal);
+      vrm.expressionManager?.setValue('Blink',      blinkVal); // VRM 0.x
     }
-    // 体の微妙な揺れ：約8秒周期で左右・前後
-    
-    if (bones.hips) {
-      bones.hips.rotation.z = Math.sin(t * 0.35 * t_coef) * 0.012
-                            + Math.sin(t * 0.13 * t_coef) * 0.006;
-      bones.hips.rotation.x = Math.sin(t * 0.28 * t_coef) * 0.008;
-    }
-    // 頭の微動：視線が少し動くような揺れ
-    if (bones.head) {
-      bones.head.rotation.y = Math.sin(t * 0.22 * t_coef) * 0.018
-                            + Math.sin(t * 0.07 * t_coef) * 0.010;
-      bones.head.rotation.z = Math.sin(t * 0.31 * t_coef) * 0.012;
-    }
-    // まばたき：約5秒ごとに0.15秒かけて閉じて開く
-    const blinkPhase = t % 5;
-    const blinkVal   = blinkPhase < 0.15
-      ? Math.sin((blinkPhase / 0.15) * Math.PI)
-      : 0;
-    vrm.expressionManager?.setValue('blink',      blinkVal);
-    vrm.expressionManager?.setValue('blinkLeft',  blinkVal);
-    vrm.expressionManager?.setValue('blinkRight', blinkVal);
-    vrm.expressionManager?.setValue('Blink',      blinkVal); // VRM 0.x
 
     vrm.update(delta);
   }
@@ -255,8 +267,9 @@ let dc          = null;
 let audioCtx    = null;
 let mouthAnimId = null;
 
-// VRMモジュールが参照する現在のRMS値
-window.currentRms = 0;
+// VRMモジュールが参照する現在のRMS値とアニメーション制御フラグ
+window.currentRms    = 0;
+window.avatarPaused  = true; // セッション開始まで停止状態
 
 const chatContainer       = document.getElementById("chatContainer");
 const aiParagraphs        = new Map();
@@ -308,6 +321,7 @@ async function startSession() {
     dc = pc.createDataChannel("oai-events");
     dc.onopen = () => {
       console.log("✅ Data channel open");
+      window.avatarPaused = false; // アニメーション再開
       const startBtn = document.getElementById("startBtn");
       startBtn.textContent = "会話中…";
       startBtn.classList.add("active");
@@ -451,7 +465,8 @@ function stopSession() {
   if (pc)          { pc.close();                       pc = null; }
   if (mouthAnimId) { cancelAnimationFrame(mouthAnimId); mouthAnimId = null; }
   if (audioCtx)    { audioCtx.close();                 audioCtx = null; }
-  window.currentRms = 0;
+  window.currentRms   = 0;
+  window.avatarPaused = true; // アニメーション停止
   console.log("🛑 Session stopped");
   document.getElementById("stopBtn").disabled = true;
   const startBtn = document.getElementById("startBtn");
