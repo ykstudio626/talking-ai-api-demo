@@ -274,6 +274,7 @@ let pc               = null;
 let dc               = null;
 let isAiResponding   = false;  // AI応答中フラグ
 let currentResponseId = null;  // 表示対象のレスポンスID（最新のみ表示）
+let micTrack    = null;  // マイクトラック（ミュート制御用）
 let audioCtx    = null;
 let mouthAnimId = null;
 
@@ -301,7 +302,7 @@ async function startSession() {
     audioEl.autoplay = true;
     document.body.appendChild(audioEl);
 
-    pc.ontrack = (event) => {
+    pc.ontrack = (event) => { // 音声はこちらに届く（WebRTC のリモート MediaStream）
       audioEl.srcObject = event.streams[0];
       console.log("🎧 Remote audio track received");
 
@@ -324,7 +325,14 @@ async function startSession() {
       updateRms();
     };
 
-    const micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const micStream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,   // スピーカー音のエコーを除去
+        noiseSuppression: true,
+        autoGainControl: true,
+      }
+    });
+    micTrack = micStream.getAudioTracks()[0]; // ミュート制御用に保持
     micStream.getTracks().forEach(track => pc.addTrack(track, micStream));
     console.log("🎤 Mic input added");
 
@@ -341,7 +349,13 @@ async function startSession() {
         type: "session.update",
         session: {
           input_audio_transcription: { model: "whisper-1" },
-          voice: "shimmer"
+          voice: "shimmer",
+          turn_detection: {
+            type: "server_vad",
+            threshold: 0.5,
+            prefix_padding_ms: 300,
+            silence_duration_ms: 500,
+          }
         }
       }));
       // AUTO_START 時：AIに最初の挨拶を発話させる
@@ -355,20 +369,23 @@ async function startSession() {
       }
     };
 
-    dc.onmessage = (evt) => {
+    dc.onmessage = (evt) => { // テキストはこちらに届く（deltaで逐次受け取り）
       const msg       = JSON.parse(evt.data);
       const eventName = msg && msg.type ? String(msg.type) : "unknown";
       if (EVENT_LOG) console.log(`📩 [${eventName}]`, msg);
 
-      // AI応答フラグ・レスポンスID管理
+      // AI応答フラグ・レスポンスID管理 + マイクミュート制御
       if (msg.type === "response.created") {
         isAiResponding    = true;
-        currentResponseId = msg.response?.id ?? null; // 最新レスポンスIDを更新
-        if (EVENT_LOG) console.log("▶ response started:", currentResponseId);
+        currentResponseId = msg.response?.id ?? null;
+        if (micTrack) micTrack.enabled = false; // AI発話中はマイクをオフ
+        if (EVENT_LOG) console.log("▶ response started: mic OFF", currentResponseId);
       }
       if (msg.type === "response.done" || msg.type === "response.cancelled") {
         isAiResponding    = false;
         currentResponseId = null;
+        if (micTrack) micTrack.enabled = true;  // AI発話終了後にマイクをオン
+        if (EVENT_LOG) console.log("⏹ response done: mic ON");
       }
 
       // 1) conversation.item.created → role に応じて <p> を準備
@@ -484,10 +501,11 @@ async function startSession() {
    セッション終了処理
 ================================ */
 function stopSession() {
-  if (dc)          { dc.close();                       dc = null; }
-  if (pc)          { pc.close();                       pc = null; }
+  if (micTrack)    { micTrack.enabled = true;           micTrack = null; }
+  if (dc)          { dc.close();                        dc = null; }
+  if (pc)          { pc.close();                        pc = null; }
   if (mouthAnimId) { cancelAnimationFrame(mouthAnimId); mouthAnimId = null; }
-  if (audioCtx)    { audioCtx.close();                 audioCtx = null; }
+  if (audioCtx)    { audioCtx.close();                  audioCtx = null; }
   window.currentRms   = 0;
   window.avatarPaused = true; // アニメーション停止
   isAiResponding    = false;
