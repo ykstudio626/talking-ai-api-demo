@@ -1,0 +1,31 @@
+{
+  "name": "open-ai-rt-demo",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "directories": {
+    "doc": "doc"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "watch": "vite build --watch",
+    "preview": "vite preview"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "packageManager": "npm@11.6.2",
+  "dependencies": {
+    "@pixiv/three-vrm": "^3.5.2",
+    "three": "^0.184.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "@types/three": "^0.184.0",
+    "@vercel/node": "^5.7.13",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.10"
+  }
+}

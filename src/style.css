@@ -1,0 +1,73 @@
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto,
+               "Hiragino Kaku Gothic ProN", "Noto Sans JP",
+               "Yu Gothic", sans-serif;
+  margin: 12px;
+  box-sizing: border-box;
+}
+*, *::before, *::after { box-sizing: inherit; }
+
+#controls { margin-bottom: 8px; }
+button { margin-right: 8px; margin-bottom: 6px; padding: 8px 12px; }
+#startBtn { width: 128px; }
+#startBtn.active { background: #c8f0c8; border-color: #6abf6a; }
+
+h1 { margin-bottom: 0.3em; }
+.sm-text { font-size: small; color: #1081eb; }
+
+/* アバター＋チャットのラッパー */
+#avatarWrapper {
+  position: relative;
+  width: 100%;
+  max-width: 800px;
+  height: calc(100vh - 90px);
+  margin-top: 8px;
+}
+
+/* VRMアバターキャンバス */
+#avatarCanvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+#avatarLoading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  pointer-events: none;
+}
+#avatarLoading img {
+  width: 80px;
+  height: 80px;
+}
+
+/* 会話表示エリア（オーバーレイ） */
+#chatContainer {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 60%;
+  padding: 12px;
+  overflow-y: auto;
+  background: rgba(255, 255, 255, 0.0);
+}
+#chatContainer p { margin: 6px 0; padding: 8px; border-radius: 6px; }
+.ai   { background: rgba(240, 240, 240, 0.7); text-align: left;  white-space: pre-wrap; }
+.user { background: rgba(212, 237, 255, 0.7); text-align: right; white-space: pre-wrap; }
+
+#logContainer {
+  margin-top: 6px;
+  color: #444;
+  font-size: 13px;
+  max-width: 800px;
+}
+
+@media (max-width: 600px) {
+  button { padding: 10px 14px; font-size: 15px; }
+  #avatarWrapper { height: calc(100vh - 80px); }
+}
