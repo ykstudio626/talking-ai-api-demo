@@ -1,4 +1,4 @@
-# dc.onmessage 受信イベント一覧
+## dc.onmessage 受信イベント一覧
 
 このドキュメントは、クライアントの `dc.onmessage` （DataChannel 受信）で扱う主要なイベントと、その用途・重要フィールドを簡潔にまとめたものです。
 
@@ -49,8 +49,9 @@ dc.onmessage = (evt) => {
 };
 ```
 
+## Q&A（Claudeに聞いてみた）
 
-responseは音声ですか、テキストですか？
+### responseは音声ですか、テキストですか？
 
 短く言うと：response は「音声」と「テキスト」の両方を含み得ます。
 
@@ -61,7 +62,7 @@ responseは音声ですか、テキストですか？
 ライフサイクル通知：response.created / response.done 等は応答の開始・終了を示すメタイベントで、直接の音声データやテキストペイロードを持たないことが多いです。
 GPT-5 mini • 0x
 
-conversationとresponseの違い
+### conversationとresponseの違いは？
 
 簡潔にまとめます。
 
