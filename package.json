@@ -19,6 +19,8 @@
   "packageManager": "npm@11.6.2",
   "dependencies": {
     "@pixiv/three-vrm": "^3.5.2",
+    "@tailwindcss/vite": "^4.3.0",
+    "tailwindcss": "^4.3.0",
     "three": "^0.184.0"
   },
   "devDependencies": {

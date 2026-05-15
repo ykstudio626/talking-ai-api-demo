@@ -6,13 +6,15 @@
   <title>おはなしチャッピー</title>
 </head>
 <body>
-  <h1>おはなしチャッピー</h1>
-  <span class="sm-text">※会話の記録は行なっていません。自由にお楽しみください！</span>
-  <span class="sm-text"><a href="https://github.com/ykstudio626/talking-ai-api-demo" target="_blank">GitHub</a></span>
-
-  <div id="controls">
-    <button id="startBtn">▶ 会話を開始</button>
-    <button id="stopBtn" disabled>⏹ 会話を終了</button>
+  <div id="site-header" class="fixed top-0 left-0 right-0 z-10 bg-white/60 px-3 py-2 pb-1">
+    <h1 class="text-2xl font-bold">おはなしチャッピー</h1>
+    <!-- <span class="sm-text ml-3"><a href="https://github.com/ykstudio626/talking-ai-api-demo" target="_blank">GitHub</a></span> -->
+    <span class="sm-text">※会話の記録は行なっていません。自由にお楽しみください！</span>
+    
+    <div id="controls" class="2">
+      <button id="startBtn" class="rounded-lg border border-gray-300 px-3 py-1 mr-2 w-32">▶ 会話を開始</button>
+      <button id="stopBtn" class="rounded-lg border border-gray-300 px-3 py-1 mr-2" disabled>⏹ 会話を終了</button>
+    </div>
   </div>
 
   <div id="logContainer"></div>

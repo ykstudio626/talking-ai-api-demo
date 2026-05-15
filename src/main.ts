@@ -93,6 +93,7 @@ async function startSession(): Promise<void> {
       dc!.send(JSON.stringify({
         type: 'session.update',
         session: {
+          instructions: 'あなたは日本語で会話するアシスタントです。必ず日本語で応答してください。',
           input_audio_transcription: { model: 'whisper-1' },
           voice: 'shimmer',
           turn_detection: {
@@ -228,13 +229,23 @@ async function startSession(): Promise<void> {
       body:    offer.sdp,
     });
 
+    if (!sdpResponse.ok) {
+      const errText = await sdpResponse.text();
+      if (sdpResponse.status === 429) {
+        throw new Error('アクセスが集中しています。しばらく待ってから再試行してください。');
+      }
+      throw new Error(`セッション開始失敗 (${sdpResponse.status}): ${errText}`);
+    }
+
     const answer: RTCSessionDescriptionInit = { type: 'answer', sdp: await sdpResponse.text() };
     await pc.setRemoteDescription(answer);
     console.log('🎤 Session started');
 
   } catch (err) {
     console.error('❌ Error:', err);
-    log('エラーが発生しました。詳細はコンソールを確認してください。');
+    const msg = err instanceof Error ? err.message : 'エラーが発生しました。詳細はコンソールを確認してください。';
+    log(msg);
+    stopSession();
   }
 }
 
@@ -264,10 +275,11 @@ function stopSession(): void {
    補助関数
 ================================ */
 function log(msg: string): void {
-  const div = document.getElementById('logContainer') as HTMLDivElement;
-  const p   = document.createElement('p');
+  const p = document.createElement('p');
+  p.className   = 'error';
   p.textContent = msg;
-  div.appendChild(p);
+  chatContainer.appendChild(p);
+  scrollToBottom();
 }
 
 function scrollToBottom(): void {

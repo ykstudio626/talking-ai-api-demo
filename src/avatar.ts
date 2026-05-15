@@ -28,13 +28,16 @@ const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true 
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
 const scene  = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 20);
-camera.position.set(0, 1.5, 1.5);
-camera.lookAt(new THREE.Vector3(0, 1.5, 0));
+const camera = new THREE.PerspectiveCamera(30, 1, 0.5, 20);
+
+const camera_y = 1.53; // 縦位置調整（大きくすると下に）
+
+camera.position.set(0, camera_y, 1.5); // 初期カメラ位置
+camera.lookAt(new THREE.Vector3(0, camera_y, 0)); // 初期カメラ視点
 
 // OrbitControls
 const controls = new OrbitControls(camera, canvas);
-controls.target.set(0, 1.5, 0);
+controls.target.set(0, camera_y, 0); // これも合わせる
 controls.enableDamping = true;
 controls.dampingFactor = 0.1;
 controls.minDistance   = 0.5;
