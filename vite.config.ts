@@ -2,7 +2,8 @@ import { defineConfig, loadEnv } from 'vite';
 import tailwindcss from '@tailwindcss/vite';
 import type { IncomingMessage } from 'node:http';
 
-const REALTIME_MODEL = 'gpt-4o-mini-realtime-preview';
+// const REALTIME_MODEL = 'gpt-4o-mini-realtime-preview'; // session.ts も変更すること
+const REALTIME_MODEL = 'gpt-4o-realtime-preview';
 
 function readBody(req: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {

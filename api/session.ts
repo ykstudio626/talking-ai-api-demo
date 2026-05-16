@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-const REALTIME_MODEL = 'gpt-4o-mini-realtime-preview'; // vite.configの方も変更すること
+// const REALTIME_MODEL = 'gpt-4o-mini-realtime-preview'; // vite.configの方も変更すること
+const REALTIME_MODEL = 'gpt-4o-realtime-preview';
 
 export const config = {
   api: {
