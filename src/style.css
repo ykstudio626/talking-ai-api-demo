@@ -4,7 +4,7 @@ body {
   font-family: system-ui, -apple-system, "Segoe UI", Roboto,
                "Hiragino Kaku Gothic ProN", "Noto Sans JP",
                "Yu Gothic", sans-serif;
-  margin: 12px;
+  margin: 0px;
   box-sizing: border-box;
 }
 *, *::before, *::after { box-sizing: inherit; }

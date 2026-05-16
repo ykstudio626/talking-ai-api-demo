@@ -2,6 +2,8 @@ import { defineConfig, loadEnv } from 'vite';
 import tailwindcss from '@tailwindcss/vite';
 import type { IncomingMessage } from 'node:http';
 
+const REALTIME_MODEL = 'gpt-4o-mini-realtime-preview';
+
 function readBody(req: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
     let data = '';
@@ -43,7 +45,7 @@ export default defineConfig(({ mode }) => {
           try {
             const sdpOffer = await readBody(req);
             const response = await fetch(
-              'https://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview',
+              `https://api.openai.com/v1/realtime?model=${REALTIME_MODEL}`,
               {
                 method: 'POST',
                 headers: {

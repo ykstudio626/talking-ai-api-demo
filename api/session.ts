@@ -1,5 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
+const REALTIME_MODEL = 'gpt-4o-mini-realtime-preview';
+
 export const config = {
   api: {
     bodyParser: false,
@@ -30,7 +32,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
   const sdpOffer = await readBody(req);
 
   const response = await fetch(
-    'https://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview',
+    `https://api.openai.com/v1/realtime?model=${REALTIME_MODEL}`,
     {
       method: 'POST',
       headers: {
