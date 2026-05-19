@@ -18,7 +18,7 @@ const DISP_AI_CHAT        = true;  // AIの発話を表示
 
 const INSTRUCTIONS = `あなたは日本語で会話するアシスタントです。
 - 必ず日本語で応答してください。
-- 会話の長さはなるべく100文字以内としてください`;
+- 会話の長さはなるべく150文字以内としてください`;
 const VOICE      = 'shimmer';
 const ragContext = [sampleRag].filter(Boolean).join('\n\n');
 
