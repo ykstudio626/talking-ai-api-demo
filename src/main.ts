@@ -1,6 +1,7 @@
 import './avatar';
 import './style.css';
 import type { ChatEntry, UserPlaceholder } from './types';
+import sampleRag from './rag/sample.txt?raw';
 
 /* ===============================
    設定
@@ -18,7 +19,8 @@ const DISP_AI_CHAT        = true;  // AIの発話を表示
 const INSTRUCTIONS = `あなたは日本語で会話するアシスタントです。
 - 必ず日本語で応答してください。
 - 会話の長さはなるべく100文字以内としてください`;
-const VOICE = 'shimmer';
+const VOICE      = 'shimmer';
+const ragContext = [sampleRag].filter(Boolean).join('\n\n');
 
 /* ===============================
    状態変数
@@ -109,7 +111,7 @@ async function startSession(): Promise<void> {
       dc!.send(JSON.stringify({
         type: 'session.update',
         session: {
-          instructions: INSTRUCTIONS,
+          instructions: ragContext ? `${INSTRUCTIONS}\n\n## 必要に応じて以下のナレッジを参照すること\n${ragContext}` : INSTRUCTIONS,
           input_audio_transcription: { model: 'whisper-1' },
           voice: VOICE,
           turn_detection: {
