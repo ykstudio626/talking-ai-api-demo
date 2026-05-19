@@ -10,6 +10,11 @@ const EVENT_LOG = true;
 const AUTO_START = true;
 const AUTO_START_MESSAGE = 'こんにちは、あなたのニックネームを教えてくれるかな？';
 
+const DISP_SITE_HEADER    = false;  // サイトヘッダーを表示
+const DISP_CHAT_CONTAINER = false;  // チャットウインドウを表示
+const DISP_USER_CHAT      = false;  // ユーザの発話を表示（falseの場合は文字起こし処理もスキップ）
+const DISP_AI_CHAT        = false;  // AIの発話を表示
+
 /* ===============================
    状態変数
 ================================ */
@@ -26,6 +31,12 @@ window.avatarPaused = true;
 const chatContainer        = document.getElementById('chatContainer') as HTMLDivElement;
 const aiParagraphs         = new Map<string, ChatEntry>();
 const userPlaceholderQueue : UserPlaceholder[] = [];
+
+/* ===============================
+   表示初期化
+================================ */
+if (!DISP_SITE_HEADER)    (document.getElementById('site-header')    as HTMLElement).style.display = 'none';
+if (!DISP_CHAT_CONTAINER) (document.getElementById('chatContainer')  as HTMLElement).style.display = 'none';
 
 /* ===============================
    ボタンイベント
@@ -139,8 +150,9 @@ async function startSession(): Promise<void> {
         const role   = item?.['role'];
         if (!itemId || aiParagraphs.has(itemId)) return;
 
-        const p = document.createElement('p');
         if (role === 'user') {
+          if (!DISP_USER_CHAT) return;
+          const p = document.createElement('p');
           p.className   = 'user';
           p.textContent = 'You: …';
           chatContainer.appendChild(p);
@@ -150,6 +162,8 @@ async function startSession(): Promise<void> {
           userPlaceholderQueue.push({ itemId, entry: userEntry });
           console.log('🗣 User item created, id:', itemId);
         } else {
+          if (!DISP_AI_CHAT) return;
+          const p = document.createElement('p');
           p.className   = 'ai';
           p.textContent = '';
           aiParagraphs.set(itemId, { p, appended: false });
@@ -157,7 +171,7 @@ async function startSession(): Promise<void> {
       }
 
       // 2) response.audio_transcript.delta
-      if (msg['type'] === 'response.audio_transcript.delta') {
+      if (msg['type'] === 'response.audio_transcript.delta' && DISP_AI_CHAT) {
         const responseId = msg['response_id'] as string | undefined;
         if (currentResponseId && responseId && responseId !== currentResponseId) return;
 
@@ -185,7 +199,7 @@ async function startSession(): Promise<void> {
       }
 
       // 3) 文字起こし完了
-      if (msg['type'] === 'conversation.item.input_audio_transcription.completed') {
+      if (msg['type'] === 'conversation.item.input_audio_transcription.completed' && DISP_USER_CHAT) {
         const itemId     = msg['item_id'] as string | undefined;
         const transcript = ((msg['transcript'] as string | undefined) ?? '').trim();
         console.log('📝 Transcription: item_id=', itemId, 'transcript=', transcript);
