@@ -12,8 +12,8 @@ const AUTO_START_MESSAGE = 'こんにちは、あなたのニックネームを�
 
 const DISP_SITE_HEADER    = false;  // サイトヘッダーを表示
 const DISP_CHAT_CONTAINER = false;  // チャットウインドウを表示
-const DISP_USER_CHAT      = false;  // ユーザの発話を表示（falseの場合は文字起こし処理もスキップ）
-const DISP_AI_CHAT        = false;  // AIの発話を表示
+const DISP_USER_CHAT      = true;  // ユーザの発話を表示（falseの場合は文字起こし処理もスキップ）
+const DISP_AI_CHAT        = true;  // AIの発話を表示
 
 /* ===============================
    状態変数
@@ -284,6 +284,20 @@ function stopSession(): void {
   aiParagraphs.clear();
   userPlaceholderQueue.length = 0;
 }
+
+/* ===============================
+   キーボードトグル
+================================ */
+document.addEventListener('keydown', (e: KeyboardEvent) => {
+  if (e.key === 'd') {
+    const el = document.getElementById('site-header') as HTMLElement;
+    el.style.display = el.style.display === 'none' ? '' : 'none';
+  }
+  if (e.key === 'c' && (DISP_USER_CHAT || DISP_AI_CHAT)) {
+    const el = document.getElementById('chatContainer') as HTMLElement;
+    el.style.display = el.style.display === 'none' ? '' : 'none';
+  }
+});
 
 /* ===============================
    補助関数
