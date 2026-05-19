@@ -15,6 +15,11 @@ const DISP_CHAT_CONTAINER = false;  // チャットウインドウを表示
 const DISP_USER_CHAT      = true;  // ユーザの発話を表示（falseの場合は文字起こし処理もスキップ）
 const DISP_AI_CHAT        = true;  // AIの発話を表示
 
+const INSTRUCTIONS = `あなたは日本語で会話するアシスタントです。
+- 必ず日本語で応答してください。
+- 会話の長さはなるべく100文字以内としてください`;
+const VOICE = 'shimmer';
+
 /* ===============================
    状態変数
 ================================ */
@@ -104,9 +109,9 @@ async function startSession(): Promise<void> {
       dc!.send(JSON.stringify({
         type: 'session.update',
         session: {
-          instructions: 'あなたは日本語で会話するアシスタントです。必ず日本語で応答してください。',
+          instructions: INSTRUCTIONS,
           input_audio_transcription: { model: 'whisper-1' },
-          voice: 'shimmer',
+          voice: VOICE,
           turn_detection: {
             type: 'server_vad',
             threshold: 0.5,
