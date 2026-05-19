@@ -10,8 +10,8 @@ const EVENT_LOG = true;
 const AUTO_START = true;
 const AUTO_START_MESSAGE = 'こんにちは、あなたのニックネームを教えてくれるかな？';
 
-const DISP_SITE_HEADER    = false;  // サイトヘッダーを表示
-const DISP_CHAT_CONTAINER = false;  // チャットウインドウを表示
+const DISP_SITE_HEADER    = true;  // サイトヘッダーを表示
+const DISP_CHAT_CONTAINER = true;  // チャットウインドウを表示
 const DISP_USER_CHAT      = true;  // ユーザの発話を表示（falseの場合は文字起こし処理もスキップ）
 const DISP_AI_CHAT        = true;  // AIの発話を表示
 
