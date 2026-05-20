@@ -11,6 +11,12 @@ const EVENT_LOG = true;
 const AUTO_START = true;
 const AUTO_START_MESSAGE = 'こんにちは、あなたのニックネームを教えてくれるかな？';
 
+const MAINTENANCE_MODE_DEFAULT = false;
+const MAINTENANCE_MODE =
+  import.meta.env['VITE_MAINTENANCE_MODE'] !== undefined
+    ? import.meta.env['VITE_MAINTENANCE_MODE'] === 'true'
+    : MAINTENANCE_MODE_DEFAULT;
+
 const DISP_SITE_HEADER    = true;  // サイトヘッダーを表示
 const DISP_CHAT_CONTAINER = true;  // チャットウインドウを表示
 const DISP_USER_CHAT      = true;  // ユーザの発話を表示（falseの場合は文字起こし処理もスキップ）
@@ -45,13 +51,21 @@ const userPlaceholderQueue : UserPlaceholder[] = [];
 if (!DISP_SITE_HEADER)    (document.getElementById('site-header')    as HTMLElement).style.display = 'none';
 if (!DISP_CHAT_CONTAINER) (document.getElementById('chatContainer')  as HTMLElement).style.display = 'none';
 
+if (MAINTENANCE_MODE) {
+  (document.getElementById('maintenanceOverlay') as HTMLElement).classList.remove('hidden');
+  (document.getElementById('startBtn') as HTMLButtonElement).disabled = true;
+  (document.getElementById('startBtn') as HTMLButtonElement).classList.add('opacity-40', 'cursor-not-allowed');
+  (document.getElementById('stopBtn') as HTMLButtonElement).disabled = true;
+  (document.getElementById('stopBtn') as HTMLButtonElement).classList.add('opacity-40', 'cursor-not-allowed');
+}
+
 /* ===============================
    ボタンイベント
 ================================ */
 (document.getElementById('startBtn') as HTMLButtonElement).onclick = startSession;
 (document.getElementById('stopBtn')  as HTMLButtonElement).onclick = stopSession;
 
-if (AUTO_START) startSession();
+if (AUTO_START && !MAINTENANCE_MODE) startSession();
 
 /* ===============================
    セッション開始
