@@ -12,6 +12,7 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 5173,
     },
+    envPrefix: ['VITE_', 'EVENT_LOG'],
     plugins: [
       tailwindcss(),
       {
@@ -68,11 +69,6 @@ export default defineConfig(({ mode }) => {
         },
       },
     ],
-    define: {
-      'import.meta.env.EVENT_LOG': env['EVENT_LOG'] !== undefined
-        ? JSON.stringify(env['EVENT_LOG'])
-        : 'undefined',
-    },
     build: {
       outDir: 'dist',
       target: 'es2020',
