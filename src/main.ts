@@ -22,10 +22,14 @@ const DISP_CHAT_CONTAINER = true;  // チャットウインドウを表示
 const DISP_USER_CHAT      = true;  // ユーザの発話を表示（falseの場合は文字起こし処理もスキップ）
 const DISP_AI_CHAT        = true;  // AIの発話を表示
 
+// const REALTIME_MODEL = 'gpt-4o-mini-realtime-preview'; // api/session.ts・vite.config.ts も変更すること
+const REALTIME_MODEL = 'gpt-realtime-1.5';
+
 const INSTRUCTIONS = `あなたはユーザーと気軽に会話するアシスタントです。
 - 日本語が基本ですが、ユーザーの要望に応じて外国語を話しても構いません。
 - 会話の長さはなるべく150文字以内としてください`;
 const VOICE      = 'shimmer';
+// const VOICE      = 'marin'; // 女性ボイス
 const ragContext = [sampleRag].filter(Boolean).join('\n\n');
 
 /* ===============================
@@ -82,7 +86,7 @@ async function startSession(): Promise<void> {
       if (tokenRes.status === 429) throw new Error('アクセスが集中しています。しばらく待ってから再試行してください。');
       throw new Error(`トークン取得失敗 (${tokenRes.status}): ${errText}`);
     }
-    const { ephemeralKey, model } = await tokenRes.json() as { ephemeralKey: string; model: string };
+    const { ephemeralKey } = await tokenRes.json() as { ephemeralKey: string };
 
     // Step 2: マイク取得
     const micStream = await navigator.mediaDevices.getUserMedia({
@@ -125,7 +129,7 @@ async function startSession(): Promise<void> {
 
     // Step 5: WebSocket 接続
     ws = new WebSocket(
-      `wss://api.openai.com/v1/realtime?model=${model}`,
+      `wss://api.openai.com/v1/realtime?model=${REALTIME_MODEL}`,
       ['realtime', `openai-insecure-api-key.${ephemeralKey}`],
     );
 
