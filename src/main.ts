@@ -125,6 +125,7 @@ async function startSession(): Promise<void> {
       dc!.send(JSON.stringify({
         type: 'session.update',
         session: {
+          type: 'realtime',
           instructions: ragContext ? `${INSTRUCTIONS}\n\n## 必要に応じて以下のナレッジを参照すること\n${ragContext}` : INSTRUCTIONS,
           input_audio_transcription: { model: 'whisper-1' },
           voice: VOICE,
@@ -191,8 +192,8 @@ async function startSession(): Promise<void> {
         }
       }
 
-      // 2) response.audio_transcript.delta
-      if (msg['type'] === 'response.audio_transcript.delta' && DISP_AI_CHAT) {
+      // 2) response.output_audio_transcript.delta
+      if (msg['type'] === 'response.output_audio_transcript.delta' && DISP_AI_CHAT) {
         const responseId = msg['response_id'] as string | undefined;
         if (currentResponseId && responseId && responseId !== currentResponseId) return;
 
@@ -243,8 +244,8 @@ async function startSession(): Promise<void> {
         }
       }
 
-      // 4) response.audio_transcript.done
-      if (msg['type'] === 'response.audio_transcript.done') {
+      // 4) response.output_audio_transcript.done
+      if (msg['type'] === 'response.output_audio_transcript.done') {
         const itemId = (msg['item_id'] ?? (msg['item'] as Record<string, string> | undefined)?.['id']) as string | undefined;
         if (!itemId) return;
         const entry = aiParagraphs.get(itemId);

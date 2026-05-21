@@ -45,12 +45,37 @@ export default defineConfig(({ mode }) => {
 
           try {
             const sdpOffer = await readBody(req);
+
+            // Step 1: エフェメラルトークン取得
+            const sessionRes = await fetch('https://api.openai.com/v1/realtime/client_secrets', {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${apiKey}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ session: { type: 'realtime', model: REALTIME_MODEL } }),
+            });
+            if (!sessionRes.ok) {
+              const errText = await sessionRes.text();
+              res.statusCode = sessionRes.status;
+              res.end(`[Step1 session失敗] ${errText}`);
+              return;
+            }
+            const sessionData = await sessionRes.json() as { value?: string };
+            const ephemeralKey = sessionData.value;
+            if (!ephemeralKey) {
+              res.statusCode = 500;
+              res.end(`[Step1 token取得失敗] レスポンス: ${JSON.stringify(sessionData)}`);
+              return;
+            }
+
+            // Step 2: エフェメラルトークンで SDP 交換
             const response = await fetch(
-              `https://api.openai.com/v1/realtime?model=${REALTIME_MODEL}`,
+              `https://api.openai.com/v1/realtime/calls?model=${REALTIME_MODEL}`,
               {
                 method: 'POST',
                 headers: {
-                  Authorization: `Bearer ${apiKey}`,
+                  Authorization: `Bearer ${ephemeralKey}`,
                   'Content-Type': 'application/sdp',
                 },
                 body: sdpOffer,

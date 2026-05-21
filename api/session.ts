@@ -32,12 +32,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
 
   const sdpOffer = await readBody(req);
 
+  // Step 1: エフェメラルトークン取得
+  const sessionRes = await fetch('https://api.openai.com/v1/realtime/client_secrets', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ session: { type: 'realtime', model: REALTIME_MODEL } }),
+  });
+  if (!sessionRes.ok) {
+    res.status(sessionRes.status).send(await sessionRes.text());
+    return;
+  }
+  const sessionData = await sessionRes.json() as { value?: string };
+  const ephemeralKey = sessionData.value;
+  if (!ephemeralKey) {
+    res.status(500).json({ error: 'エフェメラルトークンの取得に失敗しました' });
+    return;
+  }
+
+  // Step 2: エフェメラルトークンで SDP 交換
   const response = await fetch(
-    `https://api.openai.com/v1/realtime?model=${REALTIME_MODEL}`,
+    `https://api.openai.com/v1/realtime/calls?model=${REALTIME_MODEL}`,
     {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${apiKey}`,
+        Authorization: `Bearer ${ephemeralKey}`,
         'Content-Type': 'application/sdp',
       },
       body: sdpOffer,
