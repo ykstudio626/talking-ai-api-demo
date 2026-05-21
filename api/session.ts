@@ -3,21 +3,6 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 // const REALTIME_MODEL = 'gpt-4o-mini-realtime-preview'; // vite.configの方も変更すること
 const REALTIME_MODEL = 'gpt-realtime-1.5';
 
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-};
-
-function readBody(req: VercelRequest): Promise<string> {
-  return new Promise((resolve, reject) => {
-    let data = '';
-    req.on('data', (chunk: Buffer) => (data += chunk.toString()));
-    req.on('end', () => resolve(data));
-    req.on('error', reject);
-  });
-}
-
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' });
@@ -30,9 +15,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     return;
   }
 
-  const sdpOffer = await readBody(req);
-
-  // Step 1: エフェメラルトークン取得
   const sessionRes = await fetch('https://api.openai.com/v1/realtime/client_secrets', {
     method: 'POST',
     headers: {
@@ -41,10 +23,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     },
     body: JSON.stringify({ session: { type: 'realtime', model: REALTIME_MODEL } }),
   });
+
   if (!sessionRes.ok) {
     res.status(sessionRes.status).send(await sessionRes.text());
     return;
   }
+
   const sessionData = await sessionRes.json() as { value?: string };
   const ephemeralKey = sessionData.value;
   if (!ephemeralKey) {
@@ -52,24 +36,5 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     return;
   }
 
-  // Step 2: エフェメラルトークンで SDP 交換
-  const response = await fetch(
-    `https://api.openai.com/v1/realtime/calls?model=${REALTIME_MODEL}`,
-    {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${ephemeralKey}`,
-        'Content-Type': 'application/sdp',
-      },
-      body: sdpOffer,
-    },
-  );
-
-  if (!response.ok) {
-    res.status(response.status).send(await response.text());
-    return;
-  }
-
-  res.setHeader('Content-Type', 'application/sdp');
-  res.status(200).send(await response.text());
+  res.status(200).json({ ephemeralKey, model: REALTIME_MODEL });
 }

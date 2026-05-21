@@ -31,12 +31,15 @@ const ragContext = [sampleRag].filter(Boolean).join('\n\n');
 /* ===============================
    状態変数
 ================================ */
-let pc               : RTCPeerConnection | null  = null;
-let dc               : RTCDataChannel | null     = null;
+let ws              : WebSocket | null           = null;
+let captureCtx      : AudioContext | null        = null;
+let playbackCtx     : AudioContext | null        = null;
+let playbackAnalyser: AnalyserNode | null        = null;
+let scriptProcessor : ScriptProcessorNode | null = null;
+let micTrack        : MediaStreamTrack | null    = null;
+let nextPlayTime    : number                     = 0;
+let mouthAnimId     : number | null              = null;
 let currentResponseId: string | null             = null;
-let micTrack         : MediaStreamTrack | null   = null;
-let audioCtx         : AudioContext | null       = null;
-let mouthAnimId      : number | null             = null;
 
 window.currentRms   = 0;
 window.avatarPaused = true;
@@ -72,34 +75,16 @@ if (AUTO_START && !MAINTENANCE_MODE) startSession();
 ================================ */
 async function startSession(): Promise<void> {
   try {
-    pc = new RTCPeerConnection();
+    // Step 1: エフェメラルトークン取得
+    const tokenRes = await fetch(PROXY_URL, { method: 'POST' });
+    if (!tokenRes.ok) {
+      const errText = await tokenRes.text();
+      if (tokenRes.status === 429) throw new Error('アクセスが集中しています。しばらく待ってから再試行してください。');
+      throw new Error(`トークン取得失敗 (${tokenRes.status}): ${errText}`);
+    }
+    const { ephemeralKey, model } = await tokenRes.json() as { ephemeralKey: string; model: string };
 
-    const audioEl = document.createElement('audio');
-    audioEl.autoplay = true;
-    document.body.appendChild(audioEl);
-
-    pc.ontrack = (event: RTCTrackEvent) => {
-      audioEl.srcObject = event.streams[0];
-      console.log('🎧 Remote audio track received');
-
-      audioCtx = new AudioContext();
-      const source   = audioCtx.createMediaStreamSource(event.streams[0]);
-      const analyser = audioCtx.createAnalyser();
-      analyser.fftSize = 256;
-      source.connect(analyser);
-
-      const dataArray = new Uint8Array(analyser.fftSize);
-
-      function updateRms(): void {
-        analyser.getByteTimeDomainData(dataArray);
-        let sum = 0;
-        for (const v of dataArray) sum += (v - 128) ** 2;
-        window.currentRms = Math.sqrt(sum / dataArray.length);
-        mouthAnimId = requestAnimationFrame(updateRms);
-      }
-      updateRms();
-    };
-
+    // Step 2: マイク取得
     const micStream = await navigator.mediaDevices.getUserMedia({
       audio: {
         echoCancellation: true,
@@ -108,13 +93,44 @@ async function startSession(): Promise<void> {
       },
     });
     micTrack = micStream.getAudioTracks()[0] ?? null;
-    micStream.getTracks().forEach(track => pc!.addTrack(track, micStream));
-    console.log('🎤 Mic input added');
+    if (micTrack) micTrack.enabled = false; // 最初の応答が終わるまで送信を抑制
 
-    dc = pc.createDataChannel('oai-events');
+    // Step 3: 音声キャプチャ設定（24kHz PCM16）
+    captureCtx = new AudioContext({ sampleRate: 24000 });
+    const source = captureCtx.createMediaStreamSource(micStream);
+    scriptProcessor = captureCtx.createScriptProcessor(4096, 1, 1);
+    const muteNode = captureCtx.createGain();
+    muteNode.gain.value = 0;
+    source.connect(scriptProcessor);
+    scriptProcessor.connect(muteNode);
+    muteNode.connect(captureCtx.destination);
 
-    dc.onopen = () => {
-      console.log('✅ Data channel open');
+    // Step 4: 再生コンテキスト設定（アバター口パク用アナライザー付き）
+    playbackCtx      = new AudioContext({ sampleRate: 24000 });
+    void playbackCtx.resume();
+    playbackAnalyser = playbackCtx.createAnalyser();
+    playbackAnalyser.fftSize = 256;
+    playbackAnalyser.connect(playbackCtx.destination);
+    nextPlayTime = 0;
+
+    const rmsData = new Uint8Array(playbackAnalyser.fftSize);
+    function updateRms(): void {
+      playbackAnalyser!.getByteTimeDomainData(rmsData);
+      let sum = 0;
+      for (const v of rmsData) sum += (v - 128) ** 2;
+      window.currentRms = Math.sqrt(sum / rmsData.length);
+      mouthAnimId = requestAnimationFrame(updateRms);
+    }
+    updateRms();
+
+    // Step 5: WebSocket 接続
+    ws = new WebSocket(
+      `wss://api.openai.com/v1/realtime?model=${model}`,
+      ['realtime', `openai-insecure-api-key.${ephemeralKey}`],
+    );
+
+    ws.onopen = () => {
+      console.log('✅ WebSocket open');
       window.avatarPaused = false;
       const startBtn = document.getElementById('startBtn') as HTMLButtonElement;
       startBtn.textContent = '会話中…';
@@ -122,10 +138,9 @@ async function startSession(): Promise<void> {
       startBtn.disabled = true;
       (document.getElementById('stopBtn') as HTMLButtonElement).disabled = false;
 
-      dc!.send(JSON.stringify({
+      ws!.send(JSON.stringify({
         type: 'session.update',
         session: {
-          type: 'realtime',
           instructions: ragContext ? `${INSTRUCTIONS}\n\n## 必要に応じて以下のナレッジを参照すること\n${ragContext}` : INSTRUCTIONS,
           input_audio_transcription: { model: 'whisper-1' },
           voice: VOICE,
@@ -139,21 +154,38 @@ async function startSession(): Promise<void> {
       }));
 
       if (AUTO_START) {
-        dc!.send(JSON.stringify({
+        ws!.send(JSON.stringify({
           type: 'response.create',
           response: {
             instructions: `「${AUTO_START_MESSAGE}」とだけ言ってください。`,
           },
         }));
       }
+
+      // 音声ストリーミング開始
+      scriptProcessor!.onaudioprocess = (e) => {
+        if (!ws || ws.readyState !== WebSocket.OPEN) return;
+        if (!micTrack?.enabled) return;
+        // AI音声再生中はマイク送信を抑制してエコーを防ぐ
+        if (playbackCtx && nextPlayTime > playbackCtx.currentTime) return;
+        const float32 = e.inputBuffer.getChannelData(0);
+        const pcm16   = new Int16Array(float32.length);
+        for (let i = 0; i < float32.length; i++) {
+          pcm16[i] = Math.max(-32768, Math.min(32767, Math.round(float32[i] * 32768)));
+        }
+        const bytes = new Uint8Array(pcm16.buffer);
+        let binary  = '';
+        for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+        ws.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: btoa(binary) }));
+      };
     };
 
-    dc.onmessage = (evt: MessageEvent) => {
+    ws.onmessage = (evt: MessageEvent) => {
       const msg       = JSON.parse(evt.data as string) as Record<string, unknown>;
       const eventName = typeof msg['type'] === 'string' ? msg['type'] : 'unknown';
       if (EVENT_LOG) console.log(`📩 [${eventName}]`, msg);
 
-      // AI応答フラグ・レスポンスID管理 + マイクミュート制御
+      // マイクミュート制御
       if (msg['type'] === 'response.created') {
         currentResponseId = (msg['response'] as Record<string, string> | undefined)?.['id'] ?? null;
         if (micTrack) micTrack.enabled = false;
@@ -163,6 +195,12 @@ async function startSession(): Promise<void> {
         currentResponseId = null;
         if (micTrack) micTrack.enabled = true;
         if (EVENT_LOG) console.log('⏹ response done: mic ON');
+      }
+
+      // 音声再生
+      if (msg['type'] === 'response.output_audio.delta') {
+        const audio = msg['delta'] as string | undefined;
+        if (audio) appendAudio(audio);
       }
 
       // 1) conversation.item.created
@@ -256,26 +294,17 @@ async function startSession(): Promise<void> {
       }
     };
 
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
+    ws.onerror = () => {
+      console.error('❌ WebSocket error');
+    };
 
-    const sdpResponse = await fetch(PROXY_URL, {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/sdp' },
-      body:    offer.sdp,
-    });
+    ws.onclose = (e: CloseEvent) => {
+      console.log('🔌 WebSocket closed:', e.code, e.reason);
+      if (e.code !== 1000) log(`接続が切断されました (${e.code})`);
+      stopSession();
+    };
 
-    if (!sdpResponse.ok) {
-      const errText = await sdpResponse.text();
-      if (sdpResponse.status === 429) {
-        throw new Error('アクセスが集中しています。しばらく待ってから再試行してください。');
-      }
-      throw new Error(`セッション開始失敗 (${sdpResponse.status}): ${errText}`);
-    }
-
-    const answer: RTCSessionDescriptionInit = { type: 'answer', sdp: await sdpResponse.text() };
-    await pc.setRemoteDescription(answer);
-    console.log('🎤 Session started');
+    console.log('🎤 Session starting...');
 
   } catch (err) {
     console.error('❌ Error:', err);
@@ -286,14 +315,49 @@ async function startSession(): Promise<void> {
 }
 
 /* ===============================
+   音声再生（PCM16 base64 → AudioBuffer）
+================================ */
+function appendAudio(base64: string): void {
+  if (!playbackCtx || !playbackAnalyser) return;
+  if (playbackCtx.state === 'suspended') void playbackCtx.resume();
+  const binary  = atob(base64);
+  const bytes   = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  const samples = bytes.length / 2;
+  const float32 = new Float32Array(samples);
+  const view    = new DataView(bytes.buffer);
+  for (let i = 0; i < samples; i++) {
+    float32[i] = view.getInt16(i * 2, true) / 32768;
+  }
+  const buffer = playbackCtx.createBuffer(1, samples, 24000);
+  buffer.getChannelData(0).set(float32);
+  const src  = playbackCtx.createBufferSource();
+  src.buffer = buffer;
+  src.connect(playbackAnalyser);
+  const startTime = Math.max(nextPlayTime, playbackCtx.currentTime + 0.01);
+  src.start(startTime);
+  nextPlayTime = startTime + buffer.duration;
+}
+
+/* ===============================
    セッション終了
 ================================ */
 function stopSession(): void {
-  if (micTrack)    { micTrack.enabled = true;            micTrack = null; }
-  if (dc)          { dc.close();                         dc = null; }
-  if (pc)          { pc.close();                         pc = null; }
-  if (mouthAnimId) { cancelAnimationFrame(mouthAnimId);  mouthAnimId = null; }
-  if (audioCtx)    { void audioCtx.close();              audioCtx = null; }
+  if (ws)              { ws.close(1000);                          ws = null; }
+  if (scriptProcessor) { scriptProcessor.disconnect();
+                         scriptProcessor.onaudioprocess = null;   scriptProcessor = null; }
+  if (captureCtx)      { void captureCtx.close();                 captureCtx = null; }
+  if (micTrack)        { micTrack.stop();                         micTrack = null; }
+  if (mouthAnimId)     { cancelAnimationFrame(mouthAnimId);       mouthAnimId = null; }
+  // キュー済みの音声が再生し終わってからコンテキストを閉じる
+  const pCtx = playbackCtx;
+  if (pCtx) {
+    const delay = Math.max(0, (nextPlayTime - pCtx.currentTime) * 1000) + 200;
+    setTimeout(() => void pCtx.close(), delay);
+  }
+  playbackCtx       = null;
+  playbackAnalyser  = null;
+  nextPlayTime      = 0;
   window.currentRms   = 0;
   window.avatarPaused = true;
   currentResponseId = null;
