@@ -145,14 +145,21 @@ async function startSession(): Promise<void> {
       ws!.send(JSON.stringify({
         type: 'session.update',
         session: {
+          type: 'realtime',
           instructions: ragContext ? `${INSTRUCTIONS}\n\n## 必要に応じて以下のナレッジを参照すること\n${ragContext}` : INSTRUCTIONS,
-          input_audio_transcription: { model: 'whisper-1' },
-          voice: VOICE,
-          turn_detection: {
-            type: 'server_vad',
-            threshold: 0.5,
-            prefix_padding_ms: 300,
-            silence_duration_ms: 500,
+          audio: {
+            input: {
+              transcription: { model: 'gpt-4o-mini-transcribe' },
+              turn_detection: {
+                type: 'server_vad',
+                threshold: 0.5,
+                prefix_padding_ms: 300,
+                silence_duration_ms: 500,
+              },
+            },
+            output: {
+              voice: VOICE,
+            },
           },
         },
       }));
@@ -188,6 +195,7 @@ async function startSession(): Promise<void> {
       const msg       = JSON.parse(evt.data as string) as Record<string, unknown>;
       const eventName = typeof msg['type'] === 'string' ? msg['type'] : 'unknown';
       if (EVENT_LOG) console.log(`📩 [${eventName}]`, msg);
+      if (msg['type'] === 'error') console.error('⚠️ API Error:', JSON.stringify(msg));
 
       // マイクミュート制御
       if (msg['type'] === 'response.created') {
@@ -207,8 +215,8 @@ async function startSession(): Promise<void> {
         if (audio) appendAudio(audio);
       }
 
-      // 1) conversation.item.created
-      if (msg['type'] === 'conversation.item.created') {
+      // 1) conversation.item.created / conversation.item.added (GA)
+      if (msg['type'] === 'conversation.item.created' || msg['type'] === 'conversation.item.added') {
         const item   = msg['item'] as Record<string, string> | undefined;
         const itemId = item?.['id'];
         const role   = item?.['role'];
@@ -262,7 +270,7 @@ async function startSession(): Promise<void> {
         }
       }
 
-      // 3) 文字起こし完了
+      // 3a) 文字起こし完了（旧イベント、引き続き対応）
       if (msg['type'] === 'conversation.item.input_audio_transcription.completed' && DISP_USER_CHAT) {
         const itemId     = msg['item_id'] as string | undefined;
         const transcript = ((msg['transcript'] as string | undefined) ?? '').trim();
@@ -283,6 +291,23 @@ async function startSession(): Promise<void> {
           p.textContent = 'You: ' + transcript;
           chatContainer.appendChild(p);
           scrollToBottom();
+        }
+      }
+
+      // 3b) conversation.item.done からユーザー発話テキストを取得（GA API フォールバック）
+      if (msg['type'] === 'conversation.item.done' && DISP_USER_CHAT) {
+        const item   = msg['item'] as Record<string, unknown> | undefined;
+        const itemId = item?.['id'] as string | undefined;
+        const role   = item?.['role'] as string | undefined;
+        if (role === 'user' && itemId) {
+          const content  = item?.['content'] as Array<Record<string, unknown>> | undefined;
+          const transcript = (content?.[0]?.['transcript'] as string | undefined)?.trim();
+          const entry    = aiParagraphs.get(itemId);
+          if (entry?.isUser && entry.p.textContent === 'You: …') {
+            entry.p.textContent = transcript ? `You: ${transcript}` : 'You: 🎤';
+            const qi = userPlaceholderQueue.findIndex(q => q.itemId === itemId);
+            if (qi !== -1) userPlaceholderQueue.splice(qi, 1);
+          }
         }
       }
 
