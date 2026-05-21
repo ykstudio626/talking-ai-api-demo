@@ -2,4 +2,5 @@
 
 interface ImportMetaEnv {
   readonly VITE_MAINTENANCE_MODE?: string;
+  readonly EVENT_LOG?: string;
 }

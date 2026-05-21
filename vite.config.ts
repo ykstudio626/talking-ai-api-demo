@@ -68,6 +68,11 @@ export default defineConfig(({ mode }) => {
         },
       },
     ],
+    define: {
+      'import.meta.env.EVENT_LOG': env['EVENT_LOG'] !== undefined
+        ? JSON.stringify(env['EVENT_LOG'])
+        : 'undefined',
+    },
     build: {
       outDir: 'dist',
       target: 'es2020',

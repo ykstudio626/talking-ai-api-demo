@@ -7,7 +7,11 @@ import sampleRag from './rag/sample.txt?raw';
    設定
 ================================ */
 const PROXY_URL = '/api/session';
-const EVENT_LOG = true;
+const EVENT_LOG_DEFAULT = true;
+const EVENT_LOG =
+  import.meta.env['EVENT_LOG'] !== undefined
+    ? import.meta.env['EVENT_LOG'] === 'true'
+    : EVENT_LOG_DEFAULT;
 const AUTO_START = true;
 const AUTO_START_MESSAGE = 'こんにちは、あなたのニックネームを教えてくれるかな？';
 
@@ -28,8 +32,9 @@ const REALTIME_MODEL = 'gpt-realtime-1.5';
 const INSTRUCTIONS = `あなたはユーザーと気軽に会話するアシスタントです。
 - 日本語が基本ですが、ユーザーの要望に応じて外国語を話しても構いません。
 - 会話の長さはなるべく150文字以内としてください`;
-const VOICE      = 'shimmer';
-// const VOICE      = 'marin'; // 女性ボイス
+const VOICE           = 'shimmer';
+// const VOICE           = 'marin'; // 女性ボイス
+const VAD_THRESHOLD   = 0.7;  // 0〜1、高いほどノイズに鈍感
 const ragContext = [sampleRag].filter(Boolean).join('\n\n');
 
 /* ===============================
@@ -152,7 +157,7 @@ async function startSession(): Promise<void> {
               transcription: { model: 'gpt-4o-mini-transcribe' },
               turn_detection: {
                 type: 'server_vad',
-                threshold: 0.5,
+                threshold: VAD_THRESHOLD,
                 prefix_padding_ms: 300,
                 silence_duration_ms: 500,
               },
