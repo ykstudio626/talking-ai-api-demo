@@ -4,7 +4,7 @@ OpenAI Realtime API (WebRTC) と VRM アバターを組み合わせた、リア�
 
 ## 概要
 
-ブラウザのマイクから音声入力し、OpenAI の `gpt-4o-realtime-preview` モデルとリアルタイムで音声会話ができます。会話中はアバター（VRM）が口パクやアイドルアニメーションを行います。
+ブラウザのマイクから音声入力し、OpenAI の ~~`gpt-4o-realtime-preview`~~ `gpt-realtime-1.5`モデルとリアルタイムで音声会話ができます。会話中はアバター（VRM）が口パクやアイドルアニメーションを行います。
 
 ## 技術スタック
 
