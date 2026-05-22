@@ -12,7 +12,7 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 5173,
     },
-    envPrefix: ['VITE_', 'EVENT_LOG'],
+    envPrefix: 'VITE_',
     plugins: [
       tailwindcss(),
       {

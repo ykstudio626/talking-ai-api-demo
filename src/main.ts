@@ -9,8 +9,8 @@ import sampleRag from './rag/sample.txt?raw';
 const PROXY_URL = '/api/session';
 const EVENT_LOG_DEFAULT = true;
 const EVENT_LOG =
-  import.meta.env['EVENT_LOG'] !== undefined
-    ? import.meta.env['EVENT_LOG'] === 'true'
+  import.meta.env['VITE_EVENT_LOG'] !== undefined
+    ? import.meta.env['VITE_EVENT_LOG'] === 'true'
     : EVENT_LOG_DEFAULT;
 const AUTO_START = true;
 const AUTO_START_MESSAGE = 'こんにちは、あなたのニックネームを教えてくれるかな？';
