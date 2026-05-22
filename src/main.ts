@@ -35,6 +35,18 @@ const INSTRUCTIONS = `あなたはユーザーと気軽に会話するアシス�
 const VOICE           = 'shimmer';
 // const VOICE           = 'marin'; // 女性ボイス
 const VAD_THRESHOLD   = 0.7;  // 0〜1、高いほどノイズに鈍感
+
+const DEMO_MODE_DEFAULT = false;
+const DEMO_MODE =
+  import.meta.env['VITE_DEMO_MODE'] !== undefined
+    ? import.meta.env['VITE_DEMO_MODE'] === 'true'
+    : DEMO_MODE_DEFAULT;
+const DEMO_MODE_RESTRICTION_DEFAULT = 10;
+const DEMO_MODE_RESTRICTION =
+  import.meta.env['VITE_DEMO_MODE_RESTRICTION'] !== undefined
+    ? (parseInt(import.meta.env['VITE_DEMO_MODE_RESTRICTION'], 10) || DEMO_MODE_RESTRICTION_DEFAULT)
+    : DEMO_MODE_RESTRICTION_DEFAULT;
+
 const ragContext = [sampleRag].filter(Boolean).join('\n\n');
 
 /* ===============================
@@ -49,6 +61,7 @@ let micTrack        : MediaStreamTrack | null    = null;
 let nextPlayTime    : number                     = 0;
 let mouthAnimId     : number | null              = null;
 let currentResponseId: string | null             = null;
+let demoResponseCount: number                    = 0;
 
 window.currentRms   = 0;
 window.avatarPaused = true;
@@ -88,7 +101,11 @@ async function startSession(): Promise<void> {
     const tokenRes = await fetch(PROXY_URL, { method: 'POST' });
     if (!tokenRes.ok) {
       const errText = await tokenRes.text();
-      if (tokenRes.status === 429) throw new Error('アクセスが集中しています。しばらく待ってから再試行してください。');
+      if (tokenRes.status === 429) {
+        (document.getElementById('demoLimitOverlay') as HTMLElement).classList.remove('hidden');
+        (document.getElementById('startBtn') as HTMLButtonElement).disabled = true;
+        return;
+      }
       throw new Error(`トークン取得失敗 (${tokenRes.status}): ${errText}`);
     }
     const { ephemeralKey } = await tokenRes.json() as { ephemeralKey: string };
@@ -212,6 +229,14 @@ async function startSession(): Promise<void> {
         currentResponseId = null;
         if (micTrack) micTrack.enabled = true;
         if (EVENT_LOG) console.log('⏹ response done: mic ON');
+        if (DEMO_MODE && msg['type'] === 'response.done') {
+          demoResponseCount++;
+          if (demoResponseCount >= DEMO_MODE_RESTRICTION) {
+            stopSession();
+            (document.getElementById('demoLimitOverlay') as HTMLElement).classList.remove('hidden');
+            (document.getElementById('startBtn') as HTMLButtonElement).disabled = true;
+          }
+        }
       }
 
       // 音声再生
