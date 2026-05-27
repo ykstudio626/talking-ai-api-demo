@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-// const REALTIME_MODEL = 'gpt-4o-mini-realtime-preview'; // vite.configの方も変更すること
-const REALTIME_MODEL = 'gpt-realtime-1.5';
+// const REALTIME_MODEL = 'grok-voice-think-fast-1.0';
+const REALTIME_MODEL = 'grok-voice-latest';
 
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   if (req.method !== 'POST') {
@@ -9,19 +9,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     return;
   }
 
-  const apiKey = process.env['OPENAI_API_KEY'];
+  const apiKey = process.env['XAI_API_KEY'];
   if (!apiKey) {
-    res.status(500).json({ error: 'OPENAI_API_KEY が設定されていません' });
+    res.status(500).json({ error: 'XAI_API_KEY が設定されていません' });
     return;
   }
 
-  const sessionRes = await fetch('https://api.openai.com/v1/realtime/client_secrets', {
+  const sessionRes = await fetch('https://api.x.ai/v1/realtime/client_secrets', {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ session: { type: 'realtime', model: REALTIME_MODEL } }),
+    body: JSON.stringify({ expires_after: { seconds: 300 } }),
   });
 
   if (!sessionRes.ok) {

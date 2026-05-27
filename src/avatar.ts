@@ -20,7 +20,8 @@ function isVRM(obj: unknown): obj is VRM {
   );
 }
 
-const VRM_PATH = '/model-data/6055378321192136326.vrm';
+// const VRM_PATH = '/model-data/6055378321192136326.vrm';
+const VRM_PATH = '/model-data/emy.vrm';
 
 // レンダラー
 const canvas = document.getElementById('avatarCanvas') as HTMLCanvasElement;
@@ -73,14 +74,13 @@ loader.load(
     vrm = gltf.userData['vrm'];
     if (!isVRM(vrm)) return;
     VRMUtils.removeUnnecessaryVertices(gltf.scene);
-    vrm.scene.rotation.y = Math.PI;
     scene.add(vrm.scene);
 
-    // 腕を下ろす
+    // 腕を下ろす（emy.vrm 用）
     const leftArm  = vrm.humanoid.getNormalizedBoneNode('leftUpperArm');
     const rightArm = vrm.humanoid.getNormalizedBoneNode('rightUpperArm');
-    if (leftArm)  leftArm.rotation.z  =  1.4;
-    if (rightArm) rightArm.rotation.z = -1.4;
+    if (leftArm)  leftArm.rotation.z  = -1.4;
+    if (rightArm) rightArm.rotation.z =  1.4;
 
     bones = {
       hips:  vrm.humanoid.getNormalizedBoneNode('hips'),

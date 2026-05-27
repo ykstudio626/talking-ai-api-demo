@@ -13,7 +13,7 @@ const EVENT_LOG =
     ? import.meta.env['VITE_EVENT_LOG'] === 'true'
     : EVENT_LOG_DEFAULT;
 const AUTO_START = true;
-const AUTO_START_MESSAGE = 'こんにちは、あなたのニックネームを教えてくれるかな？';
+const AUTO_START_MESSAGE = 'こんにちは、私は「セラピストさくら」。あなたのニックネームを教えてくれるかな？';
 
 const MAINTENANCE_MODE_DEFAULT = false;
 const MAINTENANCE_MODE =
@@ -26,14 +26,18 @@ const DISP_CHAT_CONTAINER = true;  // チャットウインドウを表示
 const DISP_USER_CHAT      = true;  // ユーザの発話を表示（falseの場合は文字起こし処理もスキップ）
 const DISP_AI_CHAT        = true;  // AIの発話を表示
 
-// const REALTIME_MODEL = 'gpt-4o-mini-realtime-preview'; // api/session.ts・vite.config.ts も変更すること
-const REALTIME_MODEL = 'gpt-realtime-1.5';
+// const REALTIME_MODEL = 'grok-voice-think-fast-1.0'; // api/session.ts・vite.config.ts も変更すること
+const REALTIME_MODEL = 'grok-voice-latest';
 
-const INSTRUCTIONS = `あなたはユーザーと気軽に会話するアシスタントです。
+const INSTRUCTIONS = `あなたはユーザーの心を癒す女性セラピストです。ユーザーを緊張させないよう、ゆっくりとリラックスした話し方をすること。
+- 敬語は使わず、友達に話しかけるようなフランクな言葉を使ってください。
+- しっかりと傾聴を意識し、相手に共感を示すこと。
+- 時々笑ったりして、緊張をほぐしたりすること。
 - 日本語が基本ですが、ユーザーの要望に応じて外国語を話しても構いません。
-- 会話の長さはなるべく150文字以内としてください`;
-const VOICE           = 'shimmer';
-// const VOICE           = 'marin'; // 女性ボイス
+- 会話の長さはなるべく250文字以内としてください`;
+
+const VOICE           = 'ara';
+// const VOICE           = 'eve'; // 女性ボイス（活発）
 const VAD_THRESHOLD   = 0.7;  // 0〜1、高いほどノイズに鈍感
 
 const DEMO_MODE_DEFAULT = false;
@@ -151,8 +155,8 @@ async function startSession(): Promise<void> {
 
     // Step 5: WebSocket 接続
     ws = new WebSocket(
-      `wss://api.openai.com/v1/realtime?model=${REALTIME_MODEL}`,
-      ['realtime', `openai-insecure-api-key.${ephemeralKey}`],
+      `wss://api.x.ai/v1/realtime?model=${REALTIME_MODEL}`,
+      [`xai-client-secret.${ephemeralKey}`],
     );
 
     ws.onopen = () => {
@@ -171,7 +175,6 @@ async function startSession(): Promise<void> {
           instructions: ragContext ? `${INSTRUCTIONS}\n\n## 必要に応じて以下のナレッジを参照すること\n${ragContext}` : INSTRUCTIONS,
           audio: {
             input: {
-              transcription: { model: 'gpt-4o-mini-transcribe' },
               turn_detection: {
                 type: 'server_vad',
                 threshold: VAD_THRESHOLD,
@@ -190,7 +193,7 @@ async function startSession(): Promise<void> {
         ws!.send(JSON.stringify({
           type: 'response.create',
           response: {
-            instructions: `「${AUTO_START_MESSAGE}」とだけ言ってください。`,
+            instructions: `「${AUTO_START_MESSAGE}」のような内容のあいさつをすること`,
           },
         }));
       }
@@ -272,8 +275,8 @@ async function startSession(): Promise<void> {
         }
       }
 
-      // 2) response.output_audio_transcript.delta
-      if (msg['type'] === 'response.output_audio_transcript.delta' && DISP_AI_CHAT) {
+      // 2) response.text.delta (xAI) / response.output_audio_transcript.delta (OpenAI fallback)
+      if ((msg['type'] === 'response.text.delta' || msg['type'] === 'response.output_audio_transcript.delta') && DISP_AI_CHAT) {
         const responseId = msg['response_id'] as string | undefined;
         if (currentResponseId && responseId && responseId !== currentResponseId) return;
 
@@ -300,8 +303,8 @@ async function startSession(): Promise<void> {
         }
       }
 
-      // 3a) 文字起こし完了（旧イベント、引き続き対応）
-      if (msg['type'] === 'conversation.item.input_audio_transcription.completed' && DISP_USER_CHAT) {
+      // 3a) 文字起こし完了 xAI: input_audio_transcription.completed / OpenAI fallback
+      if ((msg['type'] === 'input_audio_transcription.completed' || msg['type'] === 'conversation.item.input_audio_transcription.completed') && DISP_USER_CHAT) {
         const itemId     = msg['item_id'] as string | undefined;
         const transcript = ((msg['transcript'] as string | undefined) ?? '').trim();
         console.log('📝 Transcription: item_id=', itemId, 'transcript=', transcript);

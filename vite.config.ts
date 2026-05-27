@@ -1,8 +1,8 @@
 import { defineConfig, loadEnv } from 'vite';
 import tailwindcss from '@tailwindcss/vite';
 
-// const REALTIME_MODEL = 'gpt-4o-mini-realtime-preview'; // session.ts も変更すること
-const REALTIME_MODEL = 'gpt-realtime-1.5';
+// const REALTIME_MODEL = 'grok-voice-think-fast-1.0';
+const REALTIME_MODEL = 'grok-voice-latest';
 
 export default defineConfig(({ mode }) => {
   // .env ファイルから全変数を読み込む（VITE_ プレフィックスなしも含む）
@@ -27,7 +27,7 @@ export default defineConfig(({ mode }) => {
               return;
             }
 
-            const apiKey = env['OPENAI_API_KEY'];
+            const apiKey = env['XAI_API_KEY'];
             if (!apiKey) {
               res.statusCode = 500;
               res.end(JSON.stringify({ error: 'OPENAI_API_KEY が設定されていません' }));
@@ -35,13 +35,13 @@ export default defineConfig(({ mode }) => {
             }
 
             try {
-              const sessionRes = await fetch('https://api.openai.com/v1/realtime/client_secrets', {
+              const sessionRes = await fetch('https://api.x.ai/v1/realtime/client_secrets', {
                 method: 'POST',
                 headers: {
                   Authorization: `Bearer ${apiKey}`,
                   'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ session: { type: 'realtime', model: REALTIME_MODEL } }),
+                body: JSON.stringify({ expires_after: { seconds: 300 } }),
               });
 
               if (!sessionRes.ok) {
