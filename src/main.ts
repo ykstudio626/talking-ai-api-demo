@@ -35,7 +35,7 @@ const INSTRUCTIONS = `あなたはユーザーと気軽に会話するアシス�
 const VOICE           = 'shimmer';
 // const VOICE           = 'marin'; // 女性ボイス
 const VAD_THRESHOLD   = 0.7;  // 0〜1、高いほどノイズに鈍感
-const CHAT_FADE_DELAY = 8000; // チャット吹き出しが消えるまでの時間（ms）、0 で無効
+const CHAT_FADE_DELAY = 3000; // チャット吹き出しが消えるまでの時間（ms）、0 で無効
 
 const DEMO_MODE_DEFAULT = false;
 const DEMO_MODE =
