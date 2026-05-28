@@ -53,7 +53,9 @@ body {
   overflow-y: auto;
   background: rgba(255, 255, 255, 0.0);
 }
-#chatContainer p { margin: 6px 0; padding: 8px; border-radius: 6px; display: inline-block; max-width: 85%; }
+#chatContainer p { margin: 6px 0; padding: 8px; border-radius: 6px; display: inline-block; max-width: 85%; transition: opacity 0s; }
+@keyframes fadeout { from { opacity: 1; } to { opacity: 0; } }
+.fading { animation: fadeout 1.5s ease forwards; }
 .ai    { background: rgba(240, 240, 240, 0.7); text-align: left;  white-space: pre-wrap; clear: both; float: left; }
 .user  { background: rgba(212, 237, 255, 0.7); text-align: right; white-space: pre-wrap; clear: both; float: right; }
 .error { background: rgba(255, 220, 220, 0.85); text-align: center; color: #c0392b; clear: both; width: 100%; }

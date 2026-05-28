@@ -35,6 +35,7 @@ const INSTRUCTIONS = `あなたはユーザーと気軽に会話するアシス�
 const VOICE           = 'shimmer';
 // const VOICE           = 'marin'; // 女性ボイス
 const VAD_THRESHOLD   = 0.7;  // 0〜1、高いほどノイズに鈍感
+const CHAT_FADE_DELAY = 8000; // チャット吹き出しが消えるまでの時間（ms）、0 で無効
 
 const DEMO_MODE_DEFAULT = false;
 const DEMO_MODE =
@@ -62,6 +63,7 @@ let nextPlayTime    : number                     = 0;
 let mouthAnimId     : number | null              = null;
 let currentResponseId: string | null             = null;
 let demoResponseCount: number                    = 0;
+let lastChatP       : HTMLElement | null         = null;
 
 window.currentRms   = 0;
 window.avatarPaused = true;
@@ -310,17 +312,20 @@ async function startSession(): Promise<void> {
         const entry = itemId ? aiParagraphs.get(itemId) : undefined;
         if (entry?.isUser) {
           entry.p.textContent = 'You: ' + transcript;
+          finalizeChatP(entry.p);
           const qi = userPlaceholderQueue.findIndex(q => q.itemId === itemId);
           if (qi !== -1) userPlaceholderQueue.splice(qi, 1);
         } else if (userPlaceholderQueue.length > 0) {
           const queued = userPlaceholderQueue.shift()!;
           queued.entry.p.textContent = 'You: ' + transcript;
+          finalizeChatP(queued.entry.p);
         } else {
           const p = document.createElement('p');
           p.className   = 'user';
           p.textContent = 'You: ' + transcript;
           chatContainer.appendChild(p);
           scrollToBottom();
+          finalizeChatP(p);
         }
       }
 
@@ -335,6 +340,7 @@ async function startSession(): Promise<void> {
           const entry    = aiParagraphs.get(itemId);
           if (entry?.isUser && entry.p.textContent === 'You: …') {
             entry.p.textContent = transcript ? `You: ${transcript}` : 'You: 🎤';
+            finalizeChatP(entry.p);
             const qi = userPlaceholderQueue.findIndex(q => q.itemId === itemId);
             if (qi !== -1) userPlaceholderQueue.splice(qi, 1);
           }
@@ -347,7 +353,10 @@ async function startSession(): Promise<void> {
         if (!itemId) return;
         const entry = aiParagraphs.get(itemId);
         if (entry) {
-          if (entry.appended) entry.p.textContent = entry.p.textContent.trim();
+          if (entry.appended) {
+            entry.p.textContent = entry.p.textContent.trim();
+            finalizeChatP(entry.p);
+          }
           aiParagraphs.delete(itemId);
         }
       }
@@ -428,6 +437,7 @@ function stopSession(): void {
   startBtn.disabled = false;
   aiParagraphs.clear();
   userPlaceholderQueue.length = 0;
+  lastChatP = null;
 }
 
 /* ===============================
@@ -457,4 +467,17 @@ function log(msg: string): void {
 
 function scrollToBottom(): void {
   chatContainer.scrollTop = chatContainer.scrollHeight;
+}
+
+function scheduleFade(p: HTMLElement): void {
+  if (!CHAT_FADE_DELAY) return;
+  setTimeout(() => {
+    p.classList.add('fading');
+    p.addEventListener('animationend', () => p.remove(), { once: true });
+  }, CHAT_FADE_DELAY);
+}
+
+function finalizeChatP(p: HTMLElement): void {
+  if (lastChatP) scheduleFade(lastChatP);
+  lastChatP = p;
 }
