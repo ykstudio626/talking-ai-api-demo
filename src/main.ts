@@ -31,6 +31,7 @@ const REALTIME_MODEL = 'grok-voice-latest';
 
 const INSTRUCTIONS = `あなたはユーザーの心を癒す女性セラピストです。ユーザーを緊張させないよう、ゆっくりとリラックスした話し方をすること。
 - 敬語は使わず、友達に話しかけるようなフランクな言葉を使ってください。
+- 一人称は「私」を使用すること。
 - しっかりと傾聴を意識し、相手に共感を示すこと。
 - 時々笑ったりして、緊張をほぐしたりすること。
 - 日本語が基本ですが、ユーザーの要望に応じて外国語を話しても構いません。
@@ -488,7 +489,6 @@ function scheduleFade(p: HTMLElement): void {
   if (!CHAT_FADE_DELAY) return;
   setTimeout(() => {
     p.classList.add('fading');
-    p.addEventListener('animationend', () => p.remove(), { once: true });
   }, CHAT_FADE_DELAY);
 }
 
