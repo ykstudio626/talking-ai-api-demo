@@ -31,7 +31,7 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 const scene  = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(30, 1, 0.5, 20);
 
-const camera_y = 1.53; // 縦位置調整（大きくすると下に）
+const camera_y = 1.3; // 縦位置調整（大きくすると下に）
 
 camera.position.set(0, camera_y, 1.5); // 初期カメラ位置
 camera.lookAt(new THREE.Vector3(0, camera_y, 0)); // 初期カメラ視点

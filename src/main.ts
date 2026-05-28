@@ -34,18 +34,21 @@ const INSTRUCTIONS = `あなたはユーザーの心を癒す女性セラピス�
 - しっかりと傾聴を意識し、相手に共感を示すこと。
 - 時々笑ったりして、緊張をほぐしたりすること。
 - 日本語が基本ですが、ユーザーの要望に応じて外国語を話しても構いません。
+- ユーザが性的、暴力的、攻撃的、公序良俗に反した表現をして来た場合は、回答を拒絶すること。
 - 会話の長さはなるべく250文字以内としてください`;
 
-const VOICE           = 'ara';
+// const VOICE           = 'ara';
 // const VOICE           = 'eve'; // 女性ボイス（活発）
+const VOICE              = 'sakura'; // 日本語女性
 const VAD_THRESHOLD   = 0.7;  // 0〜1、高いほどノイズに鈍感
+const CHAT_FADE_DELAY = 8000; // チャット吹き出しが消えるまでの時間（ms）、0 で無効
 
 const DEMO_MODE_DEFAULT = false;
 const DEMO_MODE =
   import.meta.env['VITE_DEMO_MODE'] !== undefined
     ? import.meta.env['VITE_DEMO_MODE'] === 'true'
     : DEMO_MODE_DEFAULT;
-const DEMO_MODE_RESTRICTION_DEFAULT = 10;
+const DEMO_MODE_RESTRICTION_DEFAULT = 100;
 const DEMO_MODE_RESTRICTION =
   import.meta.env['VITE_DEMO_MODE_RESTRICTION'] !== undefined
     ? (parseInt(import.meta.env['VITE_DEMO_MODE_RESTRICTION'], 10) || DEMO_MODE_RESTRICTION_DEFAULT)
@@ -66,6 +69,7 @@ let nextPlayTime    : number                     = 0;
 let mouthAnimId     : number | null              = null;
 let currentResponseId: string | null             = null;
 let demoResponseCount: number                    = 0;
+let lastChatP       : HTMLElement | null         = null;
 
 window.currentRms   = 0;
 window.avatarPaused = true;
@@ -228,6 +232,16 @@ async function startSession(): Promise<void> {
         if (micTrack) micTrack.enabled = false;
         if (EVENT_LOG) console.log('▶ response started: mic OFF', currentResponseId);
       }
+
+      // AI応答中に speech_started → xAI は内部でキャンセル済み（response.cancelled は来ない）
+      if (msg['type'] === 'input_audio_buffer.speech_started' && currentResponseId) {
+        currentResponseId = null;
+        if (micTrack) micTrack.enabled = true;
+        if (ws?.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'input_audio_buffer.clear' }));
+        }
+        if (EVENT_LOG) console.log('⚠️ speech_started during response → state reset, mic ON, buffer cleared');
+      }
       if (msg['type'] === 'response.done' || msg['type'] === 'response.cancelled') {
         currentResponseId = null;
         if (micTrack) micTrack.enabled = true;
@@ -313,17 +327,20 @@ async function startSession(): Promise<void> {
         const entry = itemId ? aiParagraphs.get(itemId) : undefined;
         if (entry?.isUser) {
           entry.p.textContent = 'You: ' + transcript;
+          finalizeChatP(entry.p);
           const qi = userPlaceholderQueue.findIndex(q => q.itemId === itemId);
           if (qi !== -1) userPlaceholderQueue.splice(qi, 1);
         } else if (userPlaceholderQueue.length > 0) {
           const queued = userPlaceholderQueue.shift()!;
           queued.entry.p.textContent = 'You: ' + transcript;
+          finalizeChatP(queued.entry.p);
         } else {
           const p = document.createElement('p');
           p.className   = 'user';
           p.textContent = 'You: ' + transcript;
           chatContainer.appendChild(p);
           scrollToBottom();
+          finalizeChatP(p);
         }
       }
 
@@ -338,6 +355,7 @@ async function startSession(): Promise<void> {
           const entry    = aiParagraphs.get(itemId);
           if (entry?.isUser && entry.p.textContent === 'You: …') {
             entry.p.textContent = transcript ? `You: ${transcript}` : 'You: 🎤';
+            finalizeChatP(entry.p);
             const qi = userPlaceholderQueue.findIndex(q => q.itemId === itemId);
             if (qi !== -1) userPlaceholderQueue.splice(qi, 1);
           }
@@ -350,7 +368,10 @@ async function startSession(): Promise<void> {
         if (!itemId) return;
         const entry = aiParagraphs.get(itemId);
         if (entry) {
-          if (entry.appended) entry.p.textContent = entry.p.textContent.trim();
+          if (entry.appended) {
+            entry.p.textContent = entry.p.textContent.trim();
+            finalizeChatP(entry.p);
+          }
           aiParagraphs.delete(itemId);
         }
       }
@@ -431,6 +452,7 @@ function stopSession(): void {
   startBtn.disabled = false;
   aiParagraphs.clear();
   userPlaceholderQueue.length = 0;
+  lastChatP = null;
 }
 
 /* ===============================
@@ -460,4 +482,17 @@ function log(msg: string): void {
 
 function scrollToBottom(): void {
   chatContainer.scrollTop = chatContainer.scrollHeight;
+}
+
+function scheduleFade(p: HTMLElement): void {
+  if (!CHAT_FADE_DELAY) return;
+  setTimeout(() => {
+    p.classList.add('fading');
+    p.addEventListener('animationend', () => p.remove(), { once: true });
+  }, CHAT_FADE_DELAY);
+}
+
+function finalizeChatP(p: HTMLElement): void {
+  if (lastChatP) scheduleFade(lastChatP);
+  lastChatP = p;
 }
