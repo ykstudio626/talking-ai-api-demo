@@ -17,7 +17,8 @@ body {
   position: relative;
   width: 100%;
   max-width: 800px;
-  height: calc(100vh - 90px);
+  /* height: calc(100vh - 90px); */
+  height: 100vh;
   margin-top: 8px;
   background-color: #1a0753;
 }
@@ -68,5 +69,5 @@ body {
 }
 
 @media (max-width: 600px) {
-  #avatarWrapper { height: calc(100vh - 80px); }
+  #avatarWrapper { height: 100vh; }
 }

@@ -34,15 +34,17 @@ const INSTRUCTIONS = `あなたはユーザーの心を癒す女性セラピス�
 - 一人称は「私」を使用すること。
 - しっかりと傾聴を意識し、相手に共感を示すこと。
 - 時々笑ったりして、緊張をほぐしたりすること。
+- 時々気まぐれな発言をして会話に変化をつけても良い。
 - 日本語が基本ですが、ユーザーの要望に応じて外国語を話しても構いません。
-- ユーザが性的、暴力的、攻撃的、公序良俗に反した表現をして来た場合は、回答を拒絶すること。
+- ユーザが性的、暴力的、攻撃的、公序良俗に反した表現をした場合は、回答を拒絶すること。
 - 会話の長さはなるべく250文字以内としてください`;
 
 // const VOICE           = 'ara';
 // const VOICE           = 'eve'; // 女性ボイス（活発）
 const VOICE              = 'sakura'; // 日本語女性
 const VAD_THRESHOLD   = 0.7;  // 0〜1、高いほどノイズに鈍感
-const CHAT_FADE_DELAY = 8000; // チャット吹き出しが消えるまでの時間（ms）、0 で無効
+const CHAT_FADE_DELAY    = 8000; // チャット吹き出しが消えるまでの時間（ms）、0 で無効
+const RESTRICTION_TIME   = 3;   // セッション制限時間（分）、0 で無制限
 
 const DEMO_MODE_DEFAULT = false;
 const DEMO_MODE =
@@ -71,6 +73,8 @@ let mouthAnimId     : number | null              = null;
 let currentResponseId: string | null             = null;
 let demoResponseCount: number                    = 0;
 let lastChatP       : HTMLElement | null         = null;
+let remainingSeconds: number                     = 0;
+let sessionTimerInterval: ReturnType<typeof setInterval> | null = null;
 
 window.currentRms   = 0;
 window.avatarPaused = true;
@@ -201,6 +205,22 @@ async function startSession(): Promise<void> {
             instructions: `「${AUTO_START_MESSAGE}」のような内容のあいさつをすること`,
           },
         }));
+      }
+
+      // セッション制限タイマー開始
+      if (RESTRICTION_TIME > 0) {
+        remainingSeconds = RESTRICTION_TIME * 60;
+        updateTimerDisplay();
+        sessionTimerInterval = setInterval(() => {
+          remainingSeconds--;
+          updateTimerDisplay();
+          if (remainingSeconds <= 0) {
+            clearInterval(sessionTimerInterval!);
+            sessionTimerInterval = null;
+            log('制限時間終了です');
+            stopSession();
+          }
+        }, 1000);
       }
 
       // 音声ストリーミング開始
@@ -445,6 +465,9 @@ function stopSession(): void {
   window.currentRms   = 0;
   window.avatarPaused = true;
   currentResponseId = null;
+  if (sessionTimerInterval) { clearInterval(sessionTimerInterval); sessionTimerInterval = null; }
+  remainingSeconds = 0;
+  updateTimerDisplay();
   console.log('🛑 Session stopped');
   (document.getElementById('stopBtn') as HTMLButtonElement).disabled = true;
   const startBtn = document.getElementById('startBtn') as HTMLButtonElement;
@@ -483,6 +506,18 @@ function log(msg: string): void {
 
 function scrollToBottom(): void {
   chatContainer.scrollTop = chatContainer.scrollHeight;
+}
+
+function updateTimerDisplay(): void {
+  const el = document.getElementById('timerDisplay');
+  if (!el) return;
+  if (!RESTRICTION_TIME || remainingSeconds <= 0) {
+    el.textContent = '';
+    return;
+  }
+  const m = Math.floor(remainingSeconds / 60);
+  const s = remainingSeconds % 60;
+  el.textContent = `残り ${m}:${String(s).padStart(2, '0')}`;
 }
 
 function scheduleFade(p: HTMLElement): void {
