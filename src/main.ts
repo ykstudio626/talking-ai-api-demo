@@ -44,7 +44,7 @@ const INSTRUCTIONS = `あなたはユーザーの心を癒す女性セラピス�
 const VOICE              = 'sakura'; // 日本語女性
 const VAD_THRESHOLD   = 0.7;  // 0〜1、高いほどノイズに鈍感
 const CHAT_FADE_DELAY    = 8000; // チャット吹き出しが消えるまでの時間（ms）、0 で無効
-const RESTRICTION_TIME   = 3;   // セッション制限時間（分）、0 で無制限
+const RESTRICTION_TIME   = 5;   // セッション制限時間（分）、0 で無制限
 
 const DEMO_MODE_DEFAULT = false;
 const DEMO_MODE =
@@ -206,6 +206,8 @@ async function startSession(): Promise<void> {
           },
         }));
       }
+
+      window.playMotion('VRMA_01.vrma');
 
       // セッション制限タイマー開始
       if (RESTRICTION_TIME > 0) {

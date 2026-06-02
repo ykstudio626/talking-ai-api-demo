@@ -4,6 +4,8 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
 import type { VRM } from '@pixiv/three-vrm';
+import { VRMAnimationLoaderPlugin, createVRMAnimationClip } from '@pixiv/three-vrm-animation';
+import type { VRMAnimation } from '@pixiv/three-vrm-animation';
 import type { Object3D } from 'three';
 import './types'; // Window グローバル型を適用
 
@@ -64,9 +66,29 @@ scene.add(new THREE.AmbientLight(0xffffff, 0.7));
 // VRM（型ガード経由で使用）
 let vrm: unknown = null;
 let bones: Record<string, Object3D | null> = {};
+let mixer: THREE.AnimationMixer | null = null;
+let currentAction: THREE.AnimationAction | null = null;
 
 const loader = new GLTFLoader();
 loader.register(parser => new VRMLoaderPlugin(parser));
+
+const vrmaLoader = new GLTFLoader();
+vrmaLoader.register(parser => new VRMAnimationLoaderPlugin(parser));
+
+window.playMotion = (filename: string) => {
+  if (!isVRM(vrm) || !mixer) return;
+  const path = `/model-data/VRMA_MotionPack/vrma/${filename}`;
+  vrmaLoader.load(path, (gltf: GLTF) => {
+    const animations = gltf.userData['vrmAnimations'] as VRMAnimation[] | undefined;
+    if (!animations?.[0]) return;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const clip = createVRMAnimationClip(animations[0], vrm as any);
+    if (currentAction) currentAction.stop();
+    currentAction = mixer!.clipAction(clip);
+    currentAction.setLoop(THREE.LoopRepeat, Infinity);
+    currentAction.play();
+  });
+};
 
 loader.load(
   VRM_PATH,
@@ -87,6 +109,8 @@ loader.load(
       spine: vrm.humanoid.getNormalizedBoneNode('spine'),
       head:  vrm.humanoid.getNormalizedBoneNode('head'),
     };
+
+    mixer = new THREE.AnimationMixer(vrm.scene);
 
     const loadingEl = document.getElementById('avatarLoading');
     if (loadingEl) loadingEl.style.display = 'none';
@@ -160,6 +184,7 @@ const T_COEF = 3;
       currentVrm.expressionManager?.setValue('Blink',      blinkVal);
     }
 
+    if (mixer) (mixer as { update: (d: number) => void }).update(delta);
     currentVrm.update(delta);
   }
 

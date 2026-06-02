@@ -4,6 +4,7 @@ declare global {
   interface Window {
     currentRms: number;    // AI音声のRMS値（口パク用）
     avatarPaused: boolean; // アバターアニメーション停止フラグ
+    playMotion: (filename: string) => void;
   }
 }
 
