@@ -20,7 +20,7 @@ body {
   /* height: calc(100vh - 90px); */
   height: 100vh;
   margin-top: 8px;
-  background-color: #1a0753;
+  background-image: linear-gradient(180deg, #b4f3c9, #509892);
 }
 
 /* VRMアバターキャンバス */

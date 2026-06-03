@@ -207,7 +207,8 @@ async function startSession(): Promise<void> {
         }));
       }
 
-      window.playMotion('VRMA_01.vrma');
+      // 開始時のモーション
+      window.playMotion(`VRMA_0${Math.floor(Math.random() * 3) + 1}.vrma`);
 
       // セッション制限タイマー開始
       if (RESTRICTION_TIME > 0) {
