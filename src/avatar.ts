@@ -90,8 +90,9 @@ window.playMotion = (filename: string, zoom = true) => {
     if (!animations?.[0]) return;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const clip = createVRMAnimationClip(animations[0], vrm as any);
-    if (currentAction) currentAction.stop();
+    mixer!.stopAllAction();
     currentAction = mixer!.clipAction(clip);
+    currentAction.reset();
     currentAction.setLoop(THREE.LoopOnce, 1);
     currentAction.clampWhenFinished = true;
     if (zoom) {
@@ -180,16 +181,18 @@ const T_COEF = 3;
   const currentVrm = vrm;
   {
     if (window.avatarPaused) {
-      // ニュートラルポーズにリセット
+      // ニュートラルポーズにリセット（モーション再生中は骨格に触れない）
       currentVrm.expressionManager?.setValue('aa', 0);
       currentVrm.expressionManager?.setValue('A',  0);
       currentVrm.expressionManager?.setValue('blink',      0);
       currentVrm.expressionManager?.setValue('blinkLeft',  0);
       currentVrm.expressionManager?.setValue('blinkRight', 0);
       currentVrm.expressionManager?.setValue('Blink',      0);
-      if (bones['spine']) bones['spine'].rotation.x = 0;
-      if (bones['hips'])  { bones['hips'].rotation.z = 0; bones['hips'].rotation.x = 0; }
-      if (bones['head'])  { bones['head'].rotation.y = 0; bones['head'].rotation.z = 0; }
+      if (!currentAction) {
+        if (bones['spine']) bones['spine'].rotation.x = 0;
+        if (bones['hips'])  { bones['hips'].rotation.z = 0; bones['hips'].rotation.x = 0; }
+        if (bones['head'])  { bones['head'].rotation.y = 0; bones['head'].rotation.z = 0; }
+      }
     } else {
       // 口パク
       const rms      = window.currentRms || 0;
@@ -197,19 +200,21 @@ const T_COEF = 3;
       currentVrm.expressionManager?.setValue('aa', mouthVal);
       currentVrm.expressionManager?.setValue('A',  mouthVal);
 
-      // アイドルアニメーション
-      if (bones['spine']) {
-        bones['spine'].rotation.x = Math.sin(t * 0.5 * T_COEF) * 0.018;
-      }
-      if (bones['hips']) {
-        bones['hips'].rotation.z = Math.sin(t * 0.35 * T_COEF) * 0.012
-                                 + Math.sin(t * 0.13 * T_COEF) * 0.006;
-        bones['hips'].rotation.x = Math.sin(t * 0.28 * T_COEF) * 0.008;
-      }
-      if (bones['head']) {
-        bones['head'].rotation.y = Math.sin(t * 0.22 * T_COEF) * 0.018
-                                 + Math.sin(t * 0.07 * T_COEF) * 0.010;
-        bones['head'].rotation.z = Math.sin(t * 0.31 * T_COEF) * 0.012;
+      // アイドルアニメーション（モーション再生中は骨格に触れない）
+      if (!currentAction) {
+        if (bones['spine']) {
+          bones['spine'].rotation.x = Math.sin(t * 0.5 * T_COEF) * 0.018;
+        }
+        if (bones['hips']) {
+          bones['hips'].rotation.z = Math.sin(t * 0.35 * T_COEF) * 0.012
+                                   + Math.sin(t * 0.13 * T_COEF) * 0.006;
+          bones['hips'].rotation.x = Math.sin(t * 0.28 * T_COEF) * 0.008;
+        }
+        if (bones['head']) {
+          bones['head'].rotation.y = Math.sin(t * 0.22 * T_COEF) * 0.018
+                                   + Math.sin(t * 0.07 * T_COEF) * 0.010;
+          bones['head'].rotation.z = Math.sin(t * 0.31 * T_COEF) * 0.012;
+        }
       }
 
       // まばたき
