@@ -38,6 +38,9 @@ const camera_y = 1.3; // 縦位置調整（大きくすると下に）
 camera.position.set(0, camera_y, 1.5); // 初期カメラ位置
 camera.lookAt(new THREE.Vector3(0, camera_y, 0)); // 初期カメラ視点
 
+const CAM_NORMAL = new THREE.Vector3(0, camera_y, 1.5);
+const CAM_WIDE   = new THREE.Vector3(0, camera_y, 3.0);
+
 // OrbitControls
 const controls = new OrbitControls(camera, canvas);
 controls.target.set(0, camera_y, 0); // これも合わせる
@@ -68,6 +71,10 @@ let vrm: unknown = null;
 let bones: Record<string, Object3D | null> = {};
 let mixer: THREE.AnimationMixer | null = null;
 let currentAction: THREE.AnimationAction | null = null;
+let pendingAction: THREE.AnimationAction | null = null;
+type CamPhase = 'idle' | 'zoom-out' | 'hold' | 'zoom-in';
+let camPhase: CamPhase = 'idle';
+const camTarget = CAM_NORMAL.clone();
 
 const loader = new GLTFLoader();
 loader.register(parser => new VRMLoaderPlugin(parser));
@@ -75,7 +82,7 @@ loader.register(parser => new VRMLoaderPlugin(parser));
 const vrmaLoader = new GLTFLoader();
 vrmaLoader.register(parser => new VRMAnimationLoaderPlugin(parser));
 
-window.playMotion = (filename: string) => {
+window.playMotion = (filename: string, zoom = true) => {
   if (!isVRM(vrm) || !mixer) return;
   const path = `/model-data/VRMA_MotionPack/vrma/${filename}`;
   vrmaLoader.load(path, (gltf: GLTF) => {
@@ -85,8 +92,15 @@ window.playMotion = (filename: string) => {
     const clip = createVRMAnimationClip(animations[0], vrm as any);
     if (currentAction) currentAction.stop();
     currentAction = mixer!.clipAction(clip);
-    currentAction.setLoop(THREE.LoopRepeat, Infinity);
-    currentAction.play();
+    currentAction.setLoop(THREE.LoopOnce, 1);
+    currentAction.clampWhenFinished = true;
+    if (zoom) {
+      pendingAction = currentAction;
+      camTarget.copy(CAM_WIDE);
+      camPhase = 'zoom-out';
+    } else {
+      (currentAction as { play: () => void }).play();
+    }
   });
 };
 
@@ -111,6 +125,13 @@ loader.load(
     };
 
     mixer = new THREE.AnimationMixer(vrm.scene);
+    mixer.addEventListener('finished', () => {
+      currentAction = null;
+      if (camPhase === 'hold') {
+        camTarget.copy(CAM_NORMAL);
+        camPhase = 'zoom-in';
+      }
+    });
 
     const loadingEl = document.getElementById('avatarLoading');
     if (loadingEl) loadingEl.style.display = 'none';
@@ -131,6 +152,24 @@ const T_COEF = 3;
 (function animate(): void {
   requestAnimationFrame(animate);
   controls.update();
+
+  // モーション中のカメラ演出（OrbitControls を一時停止して lerp）
+  if (camPhase !== 'idle') {
+    controls.enabled = false;
+    camera.position.lerp(camTarget, 0.05);
+    camera.lookAt(controls.target);
+    if (camPhase === 'zoom-out' && camera.position.distanceTo(camTarget) < 0.03) {
+      camera.position.copy(camTarget);
+      if (pendingAction) { (pendingAction as { play: () => void }).play(); pendingAction = null; }
+      camPhase = 'hold';
+    } else if (camPhase === 'zoom-in' && camera.position.distanceTo(camTarget) < 0.03) {
+      camera.position.copy(camTarget);
+      camPhase = 'idle';
+      controls.enabled = true;
+      controls.update();
+    }
+  }
+
   const delta = clock.getDelta();
   const t     = clock.getElapsedTime();
 
