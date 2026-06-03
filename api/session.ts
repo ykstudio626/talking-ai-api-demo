@@ -8,8 +8,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     res.status(405).json({ error: 'Method not allowed' });
     return;
   }
-  // Debug: 出力は存在確認のみ（値は出力しない）
-  console.log('DEBUG: XAI_API_KEY present:', !!process.env['XAI_API_KEY'], 'NODE_ENV:', process.env.NODE_ENV);
+
 
   const apiKey = process.env['XAI_API_KEY'];
   if (!apiKey) {
