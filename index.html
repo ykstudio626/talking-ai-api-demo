@@ -6,14 +6,21 @@
   <title>セラピストさくら</title>
 </head>
 <body>
-  <div id="site-header" class="fixed top-0 left-0 right-0 z-10 bg-white/60 px-3 py-2 pb-1">
-    <h1 class="text-2xl font-bold">セラピストさくら</h1>
-    <!-- <span class="sm-text ml-3"><a href="https://github.com/ykstudio626/talking-ai-api-demo" target="_blank">GitHub</a></span> -->
-    <span class="sm-text">※会話の記録は行なっていません。自由にお楽しみください！</span>
+  <div id="site-header" class="fixed top-0 left-0 right-0 z-10 bg-white/60 px-3 py-2 pb-1 flex flex-col md:flex-row justify-between items-start md:items-center space-y-2 md:space-y-0 max-w-[800px] mx-auto">
+    <div>
+      <h1 class="text-2xl font-bold">セラピストさくら</h1>
+      <!-- <span class="sm-text ml-3"><a href="https://github.com/ykstudio626/talking-ai-api-demo" target="_blank">GitHub</a></span> -->
+      <span class="sm-text">※会話の記録は行なっていません。自由にお楽しみください！</span>
+    </div>
     
-    <div id="controls" class="2">
-      <button id="startBtn" class="rounded-lg border border-gray-300 px-3 py-1 mr-2 w-32">▶ 会話を開始</button>
-      <button id="stopBtn" class="rounded-lg border border-gray-300 px-3 py-1 mr-2" disabled>⏹ 会話を終了</button>
+    <div class="flex items-center space-x-2">
+      <div id="controls" class="flex items-center">
+        <button id="startBtn" class="rounded-lg border border-gray-300 px-3 py-1 mr-2 w-28 md:w-32 whitespace-nowrap text-sm md:text-base">▶ 会話を開始</button>
+        <button id="stopBtn" class="rounded-lg border border-gray-300 px-3 py-1 mr-2 whitespace-nowrap text-sm md:text-base" disabled>⏹ 会話を終了</button>
+      </div>
+      <button id="fullscreenToggle" class="opacity-40 hover:opacity-80 transition-opacity focus:outline-none p-1 flex items-center justify-center shrink-0" title="全画面表示">
+        <img src="/full-screen.svg" alt="Fullscreen Toggle" class="w-6 h-6" style="filter: invert(30%);" />
+      </button>
     </div>
   </div>
 

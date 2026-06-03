@@ -103,6 +103,22 @@ if (MAINTENANCE_MODE) {
 (document.getElementById('startBtn') as HTMLButtonElement).onclick = startSession;
 (document.getElementById('stopBtn')  as HTMLButtonElement).onclick = stopSession;
 
+// フルスクリーントグルボタンの設定
+const fullscreenToggle = document.getElementById('fullscreenToggle') as HTMLButtonElement;
+if (fullscreenToggle) {
+  fullscreenToggle.onclick = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch((err) => {
+        console.warn('全画面表示への移行に失敗しました:', err);
+      });
+    } else {
+      document.exitFullscreen().catch((err) => {
+        console.warn('全画面表示の解除に失敗しました:', err);
+      });
+    }
+  };
+}
+
 if (AUTO_START && !MAINTENANCE_MODE) startSession();
 
 /* ===============================
