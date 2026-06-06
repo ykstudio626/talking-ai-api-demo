@@ -49,7 +49,7 @@ body {
 /* 会話表示エリア（オーバーレイ） */
 #chatContainer {
   position: absolute;
-  bottom: 0;
+  bottom: 12px;
   left: 0;
   right: 0;
   height: 50%;

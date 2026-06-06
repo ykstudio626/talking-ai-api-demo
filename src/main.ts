@@ -42,7 +42,7 @@ const INSTRUCTIONS = `あなたはユーザーの心を癒す女性セラピス�
 // const VOICE           = 'ara';
 // const VOICE           = 'eve'; // 女性ボイス（活発）
 const VOICE              = 'sakura'; // 日本語女性
-const VAD_THRESHOLD   = 0.7;  // 0〜1、高いほどノイズに鈍感
+const VAD_THRESHOLD   = 0.3;  // 0〜1、高いほどノイズに鈍感
 const CHAT_FADE_DELAY    = 8000; // チャット吹き出しが消えるまでの時間（ms）、0 で無効
 const RESTRICTION_TIME   = 5;   // セッション制限時間（分）、0 で無制限
 

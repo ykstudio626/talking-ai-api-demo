@@ -127,6 +127,7 @@ loader.load(
 
     mixer = new THREE.AnimationMixer(vrm.scene);
     mixer.addEventListener('finished', () => {
+      if (currentAction) currentAction.stop();
       currentAction = null;
       if (camPhase === 'hold') {
         camTarget.copy(CAM_NORMAL);
